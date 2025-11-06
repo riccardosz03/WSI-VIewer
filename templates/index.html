@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WSI Viewer</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/upload.css">
+</head>
+<body>
+
+  <header>
+    WSI Viewer
+  </header>
+
+  <label class="upload-box" for="fileInput">
+    Trascina qui il tuo file WSI o clicca per selezionarlo
+    <input type="file" id="fileInput" accept=".svs,.tiff,.ndpi,.mrxs,.vms,.vmu,.scn,.bif,.tif" />
+  </label>
+
+  <div class="info">
+    File WSI supportati: .svs, .tiff, .ndpi, .mrxs, .vms, .vmu, .scn, .bif, .tif
+  </div>
+
+  <div class="progress-container">
+    <div id="progressBar" class="progress-bar"></div>
+  </div>
+
+  <script src="/static/js/upload.js"></script>
+
+
+<footer class="footer-bar">
+  @2025 - Tesi WSI Viewer - Progetto open source su <a href="https://github.com/tuo-repo" target="_blank">GitHub</a> – Sviluppato da Riccardo Avino
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSI Viewer - {{ filename }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style_viewer.css">
+</head>
+<body>
+    <header>
+        WSI Viewer - {{ filename }}
+    </header>
+
+    <div class="toolbar">
+        <button id="zoomInBtn">🔍+</button>
+        <button id="zoomOutBtn">🔍−</button>
+        <button id="homeBtn">⌂</button>
+        <button onclick="window.location.href='/'">⬅ Torna al caricamento</button>
+    </div>
+
+    <div class="viewer-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <footer class="footer-bar">
+        © 2025 – Progetto <strong>WSI Viewer</strong> open source su
+        <a href="https://github.com/tuo-repo" target="_blank">GitHub</a>
+    </footer>
+
+    <script>const VIEWER_FILENAME = "{{ filename }}";</script>
+    <script src="/static/js/viewer_canvas.js"></script>
+    
+    <style>
+        .viewer-container {
+            width: 90%;
+            height: 80vh;
+            margin: 20px auto;
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</body>
+</html>
+
