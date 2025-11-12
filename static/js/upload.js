@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadBox = document.querySelector('.upload-box');
     const fileInput = document.getElementById('fileInput');
 
-    // Previeni il comportamento predefinito del browser per il drag and drop
+    // PREVENIRE IL COMPORTAMENTO DEL BROWSER PER IL DRAG AND DROP
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         uploadBox.addEventListener(eventName, preventDefaults, false);
         document.body.addEventListener(eventName, preventDefaults, false);
     });
 
-    // Evidenzia la zona di drop quando si trascina un file sopra
+    // EVIDENZIARE LA ZONA DI DRAG
     ['dragenter', 'dragover'].forEach(eventName => {
         uploadBox.addEventListener(eventName, highlight, false);
     });
@@ -17,10 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadBox.addEventListener(eventName, unhighlight, false);
     });
 
-    // Gestisci il drop del file
     uploadBox.addEventListener('drop', handleDrop, false);
     
-    // Gestisci la selezione del file tramite click
     fileInput.addEventListener('change', handleFileSelect, false);
 
     function preventDefaults(e) {
@@ -50,20 +48,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleFile(file) {
         if (!file) return;
 
-        // Verifica che il file sia nel formato corretto
         if (!file.name.toLowerCase().endsWith('.svs')) {
             alert('Carica un file .svs');
             return;
         }
 
-        // Crea il FormData e aggiungi il file
         const formData = new FormData();
         formData.append('file', file);
 
-        // Mostra indicatore di caricamento
         uploadBox.classList.add('uploading');
         
-        // Invia il file al server
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/upload', true);
         document.getElementById('progress-container').style.display = 'block';
