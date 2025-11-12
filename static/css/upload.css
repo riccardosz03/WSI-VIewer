@@ -15,7 +15,7 @@
     transition: all 0.3s ease;
     position: relative;
     background-color: #ffffff;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
     color: #333;
 }
 
@@ -45,7 +45,7 @@
     align-items: center;
     justify-content: center;
     font-size: 1.2em;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
 }
 
 .upload-box.uploading::before {
@@ -57,4 +57,22 @@
     z-index: 1;
     font-weight: bold;
     color: #2f80ed;
+}
+
+#progress-container {
+  width: 100%;
+  max-width: 400px;
+  height: 20px;
+  background-color: #222;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 20px auto;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+}
+
+#progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(to right, #00c6ff, #0072ff);
+  transition: width 0.3s ease;
 }

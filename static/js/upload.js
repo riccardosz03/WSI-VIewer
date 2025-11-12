@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Verifica che il file sia nel formato corretto
         if (!file.name.toLowerCase().endsWith('.svs')) {
-            alert('Per favore, carica un file .svs');
+            alert('Carica un file .svs');
             return;
         }
 
@@ -64,24 +64,33 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadBox.classList.add('uploading');
         
         // Invia il file al server
-        fetch('/upload', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Errore nel caricamento del file');
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload', true);
+        document.getElementById('progress-container').style.display = 'block';
+
+        xhr.upload.onprogress = function (e) {
+            if(e.lenghtComputable){
+                const percent = (e.loaded / e.total) * 100;
+                document.getElementById('progress-bar').style.width = `${percent}%`;
             }
-            return response;
-        })
-        .then(response => {
-            // Il server reindirizza automaticamente alla pagina di visualizzazione
-            window.location.href = response.url;
-        })
-        .catch(error => {
-            console.error('Errore:', error);
-            alert('Si è verificato un errore durante il caricamento del file');
+        };
+
+        xhr.onload = function() {
+            if(xhr.status >= 200 && xhr.status < 300) {
+                window.location.href = xhr.responseURL;
+            }
+            else {
+                alert('Errore nel nel caricamento del file');
+                uploadBox.classList.remove('uploading');
+                document.getElementById('progress-container').style.display = 'None';
+            }
+        };
+
+        xhr.onerror = function() {
+            alert('Errore di rete durante upload');
             uploadBox.classList.remove('uploading');
-        });
+            document.getElementById('progress-container').style.display = 'None';
+        };
+        xhr.send(formData);
     }
 });

@@ -1,0 +1,325 @@
+(async function (){
+    console.log('[INIT] Script caricato');
+    const canvas = document.getElementById('canvas');
+    if (!canvas) {
+        console.error('[INIT] ERRORE: Canvas non trovato!');
+        return;
+    }
+    console.log('[INIT] Canvas trovato:', canvas);
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('[INIT] ERRORE: Impossibile ottenere il contesto 2D del canvas!');
+        return;
+    }
+    console.log('[INIT] Canvas context ottenuto');
+    
+    const filename = window.VIEWER_FILENAME;
+    if (!filename) {
+        console.error('[INIT] ERRORE: VIEWER_FILENAME non definito!');
+        return;
+    }
+    console.log('[INIT] Filename:', filename);
+
+    // COSTANTI
+    const TILE_SIZE = 512;
+    let metadata = null;
+    let currentZoom = 1.0;  
+    let offsetX = 0;
+    let offsetY = 0;
+    let fullImageW = 0;
+    let fullImageH = 0;
+    const tileCache = new Map();
+    let isRendering = false;
+
+
+    // RECUPERARE I METADATI
+    async function fetchMetadata() {
+        console.log('[METADATA] Fetching metadata...');
+        const resp = await fetch(`/slide/${filename}/info`);
+        if (!resp.ok) throw new Error(`Metadata fetch failed: ${resp.status}`);
+        const data = await resp.json();
+        console.log('[METADATA] Ricevuti:', data);
+        return data;
+    }
+
+
+
+    // RICHIEDERE UN TILE AL SERVER
+    async function requestTile(level, col, row) {
+        const key = `${level}_${col}_${row}`;
+        
+        if (tileCache.has(key)) {
+            console.debug(`[TILE] Cache hit: L${level} C${col} R${row}`);
+            return tileCache.get(key);
+        }
+
+        console.debug(`[TILE] Richiedo: L${level} C${col} R${row}`);
+        const url = `/slide/${filename}/tile?level=${level}&col=${col}&row=${row}`;
+        
+        const img = new Image();
+        const promise = new Promise((resolve, reject) => {
+            img.onload = () => {
+                console.debug(`[TILE] Caricato: L${level} C${col} R${row}`);
+                resolve(img);
+            };
+            img.onerror = () => {
+                console.error(`[TILE] Errore nel caricamento: L${level} C${col} R${row}`);
+                reject(new Error(`Tile load failed: L${level} C${col} R${row}`));
+            };
+            img.src = url;
+        });
+
+        tileCache.set(key, promise);
+        return promise;
+    }
+
+
+
+    // SCELTA DEL LIVELLO DI ZOOM APPROPRIATO
+    function chooseLevel(zoomFactor) {
+        if (!metadata) return 0;
+        const ds = metadata.level_downsamples;
+        let best = 0;
+        let bestDiff = Infinity;
+
+        for (let i = 0; i < ds.length; i++) {
+            const diff = Math.abs(ds[i] - (1.0 / zoomFactor));
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = i;
+            }
+        }
+        console.debug(`[ZOOM] chooseLevel(${zoomFactor.toFixed(3)}) -> L${best} (downsample=${ds[best].toFixed(3)})`);
+        return best;
+    }
+
+
+
+    // CALCOLO DEI TILE VISIBILI
+    function computeVisibleTiles(level) {
+        const downsample = metadata.level_downsamples[level];
+        const levelDims = metadata.level_dimensions[level];
+        const [levelW, levelH] = levelDims;
+
+        const viewX0 = offsetX;
+        const viewY0 = offsetY;
+        const viewX1 = offsetX + canvas.width / currentZoom;
+        const viewY1 = offsetY + canvas.height / currentZoom;
+
+        const x0 = Math.floor(viewX0 / downsample);
+        const y0 = Math.floor(viewY0 / downsample);
+        const x1 = Math.ceil(viewX1 / downsample);
+        const y1 = Math.ceil(viewY1 / downsample);
+
+        const tx0 = Math.floor(x0 / TILE_SIZE);
+        const ty0 = Math.floor(y0 / TILE_SIZE);
+        const tx1 = Math.floor(x1 / TILE_SIZE);
+        const ty1 = Math.floor(y1 / TILE_SIZE);
+
+        const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
+        const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
+
+        const tiles = [];
+        for (let col = Math.max(0, tx0); col <= Math.min(tx1, maxTileCol); col++) {
+            for (let row = Math.max(0, ty0); row <= Math.min(ty1, maxTileRow); row++) {
+                tiles.push({ level, col, row });
+            }
+        }
+        console.debug(`[RENDER] Level ${level}: ${tiles.length} tile visibili`);
+        return tiles;
+    }
+
+
+
+    // RENDERING
+    async function render() {
+        if (isRendering) return;
+        isRendering = true;
+
+        try {
+            const level = chooseLevel(currentZoom);
+            const downsample = metadata.level_downsamples[level];
+            const tiles = computeVisibleTiles(level);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (const tile of tiles) {
+                try {
+                    const img = await requestTile(tile.level, tile.col, tile.row);
+                    
+                    const tileX = tile.col * TILE_SIZE * downsample;
+                    const tileY = tile.row * TILE_SIZE * downsample;
+
+                    const drawX = (tileX - offsetX) * currentZoom;
+                    const drawY = (tileY - offsetY) * currentZoom;
+                    const drawW = TILE_SIZE * downsample * currentZoom;
+                    const drawH = TILE_SIZE * downsample * currentZoom;
+
+                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                } catch (err) {
+                    console.error('[RENDER] Errore nel rendering del tile:', err);
+                }
+            }
+            document.getElementById('info-current-level').textContent = level;
+            document.getElementById('info-visible-tiles').textContent = tiles.length;
+            document.getElementById('info-tile-size').textContent = TILE_SIZE
+
+            console.debug(`[RENDER] Frame completo - zoom=${currentZoom.toFixed(3)}, offset=(${offsetX},${offsetY})`);
+        } catch (err) {
+            console.error('[RENDER] Errore:', err);
+        } finally {
+            isRendering = false;
+        }
+    }
+
+
+    function constrainOffset() {
+        const maxOffsetX = Math.max(0, fullImageW - canvas.width / currentZoom);
+        const maxOffsetY = Math.max(0, fullImageH - canvas.height / currentZoom);
+
+        offsetX = Math.max(0, Math.min(offsetX, maxOffsetX));
+        offsetY = Math.max(0, Math.min(offsetY, maxOffsetY));
+    }
+
+
+    // FUNZIONI PER LO ZOOM
+    const MIN_ZOOM = 0.05; 
+    const MAX_ZOOM = 16.0; 
+
+    function clampZoom(z) {
+        const initialFit = Math.min(1.0, Math.max((window.__INITIAL_FIT_ZOOM__ || 0.2), MIN_ZOOM));
+        const minAllowed = Math.max(MIN_ZOOM, initialFit * 0.2);
+        const maxAllowed = MAX_ZOOM;
+        return Math.max(minAllowed, Math.min(z, maxAllowed));
+    }
+
+    function zoomBy(factor, centerX = canvas.width/2, centerY = canvas.height/2) {
+        const orig_imgX = offsetX + centerX / currentZoom;
+        const orig_imgY = offsetY + centerY / currentZoom;
+
+        let newZoom = currentZoom * factor;
+        newZoom = clampZoom(newZoom);
+
+        offsetX = orig_imgX - centerX / newZoom;
+        offsetY = orig_imgY - centerY / newZoom;
+        currentZoom = newZoom;
+        constrainOffset();
+        console.log(`[ZOOM] zoomBy factor=${factor.toFixed(3)} -> zoom=${currentZoom.toFixed(3)}`);
+        render();
+    }
+
+    function zoomIn() {
+        zoomBy(1.25);
+    }
+
+    function zoomOut() {
+        zoomBy(1/1.25);
+    }
+
+    function zoomReset() {
+        console.log('[ZOOM] Reset');
+        const initial = window.__INITIAL_FIT_ZOOM__ || 1.0;
+        currentZoom = initial;
+        offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
+        offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);
+        constrainOffset();
+        render();
+    }
+
+    // BOTTONI: ZOOMIN, ZOOMOUT, ZOOMRESET
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const homeBtn = document.getElementById('homeBtn');
+
+    if (zoomInBtn) zoomInBtn.addEventListener('click', zoomIn);
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
+    if (homeBtn) homeBtn.addEventListener('click', zoomReset);
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.001);
+        zoomBy(factor, mouseX, mouseY);
+    }, { passive: false });
+
+
+
+    // FUNZIONI PER IL PANNING
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    canvas.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const deltaX = (e.clientX - lastX) / currentZoom;
+        const deltaY = (e.clientY - lastY) / currentZoom;
+        offsetX -= deltaX;
+        offsetY -= deltaY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        constrainOffset();
+        render();
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+        isDragging = false;
+        canvas.releasePointerCapture(e.pointerId);
+    });
+
+   
+
+    // INIZIALIZZAZIONE
+    console.log('[INIT] Caricamento metadati...');
+    try {
+        metadata = await fetchMetadata();
+        [fullImageW, fullImageH] = metadata.dimensions;
+        console.log(`[INIT] Immagine: ${fullImageW}x${fullImageH}`);
+    } catch (err) {
+        console.error('[INIT] Errore caricamento metadati:', err);
+        return;
+    }
+
+    if (metadata && metadata.properties) {
+        const vendor = metadata.properties["openslide.vendor"] || "N.D";
+        document.getElementById('info-producer').textContent = vendor
+    }
+    document.getElementById('info-size').textContent = `${metadata.dimensions[0]} × ${metadata.dimensions[1]}`;
+    document.getElementById('info-levels').textContent = metadata.level_downsamples.length;
+    document.getElementById('info-dims').textContent = metadata.level_dimensions.map(d => `(${d[0]}×${d[1]})`).join(', ');
+    document.getElementById('info-downsamples').textContent = metadata.level_downsamples.map(d => d.toFixed(1)).join(', ');
+
+
+    const viewportW = window.innerWidth * 0.9;
+    const viewportH = window.innerHeight * 0.9;
+    const scaleW = viewportW / fullImageW;
+    const scaleH = viewportH / fullImageH;
+    currentZoom = Math.min(scaleW, scaleH, 1.0);
+    window.__INITIAL_FIT_ZOOM__ = currentZoom;
+
+    const deviceRatio = window.devicePixelRatio || 1;
+    const canvasW = Math.round(fullImageW * currentZoom);
+    const canvasH = Math.round(fullImageH * currentZoom);
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+
+    offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
+    offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);
+
+    console.log(`[INIT] Canvas: ${canvasW}x${canvasH}, zoom iniziale: ${currentZoom.toFixed(3)}`);
+
+    console.log('[INIT] Primo rendering...');
+    await render();
+    console.log('[INIT] Script pronto!');
+
+})();

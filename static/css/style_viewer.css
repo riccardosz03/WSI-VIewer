@@ -1,28 +1,83 @@
 .toolbar {
   display: flex;
+  flex-direction: row;
   gap: 12px;
-  margin: 20px 0;
-  padding: 10px;
-  background-color: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  padding: 15px 0;
+  border-bottom: 2px solid #2f80ed;
+  justify-content: center;
 }
 
-.toolbar button {
-  background-color: #ffffff;
-  color: #2f80ed;
-  border: 2px solid #2f80ed;
-  padding: 8px 16px;
+.toolbar-btn {
+  background-color: #2f80ed;
+  color: #ffffff;
+  border: none;
+  padding: 10px 14px;
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
+  font-size: 0.95em;
   font-family: Arial, sans-serif;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(47, 128, 237, 0.3);
+  min-width: 50px;
+  text-align: center;
 }
 
-.toolbar button:hover {
-  background-color: #2f80ed;
-  color: #ffffff;
+.toolbar-btn:hover {
+  background-color: #1e5fc9;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(47, 128, 237, 0.5);
+}
+
+.toolbar-btn:active {
+  transform: translateY(0);
+}
+
+.info-panel {
+  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.info-panel h3 {
+  margin: 0 0 12px 0;
+  color: #2f80ed;
+  font-size: 0.95em;
+  font-weight: bold;
+}
+
+.info-table-horizontal {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8em;
+}
+
+.info-table-horizontal tbody tr {
+  border-bottom: 1px solid #ddd;
+}
+
+.info-table-horizontal th {
+  text-align: left;
+  padding: 8px 6px;
+  font-weight: bold;
+  color: #2f80ed;
+  background-color: #f5f5f5;
+  width: 45%;
+  border-right: 1px solid #ddd;
+}
+
+.info-table-horizontal td {
+  padding: 8px 6px;
+  color: #333;
+  word-break: break-word;
+}
+
+.info-table-horizontal tbody tr:hover {
+  background-color: #f9f9f9;
 }
 
 .notes-section {
@@ -33,7 +88,7 @@
   background-color: #ffffff;
   border-radius: 10px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
 }
 
 .notes-section textarea {
@@ -44,7 +99,7 @@
   border-radius: 6px;
   border: 2px solid #d9e2ec;
   resize: vertical;
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
   transition: border-color 0.3s ease;
 }
 
@@ -62,7 +117,7 @@
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
   transition: background-color 0.3s ease;
 }
 
@@ -74,5 +129,41 @@
   margin-left: 12px;
   font-size: 0.9rem;
   color: #555;
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', sans-serif;
 }
+
+.info-panel {
+  margin-top: 20px;
+  background: rgba(255,255,255,0.03);
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #fff;
+  overflow-x: auto; 
+  border: 1;/* permette lo scroll orizzontale se serve */
+}
+
+.info-table-horizontal {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto; /* lascia che le celle si adattino al contenuto */
+}
+
+.info-table-horizontal th,
+.info-table-horizontal td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap; /* evita che vadano a capo */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.info-table-horizontal th {
+  font-weight: 600;
+  color: #ccc;
+  background: rgba(255,255,255,0.04);
+}
+
+
