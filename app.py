@@ -16,7 +16,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 #dizioneario per memorizzare gli slide e deepzoomaperti, senza doverli riaprire ogni volta
 SLIDE_CACHE = {}
 DEEPZOOM_CACHE = {}
-TILE_SIZE = 512
+TILE_SIZE = 256
 
 def slide_path(filename):
     safe = os.path.basename(filename)

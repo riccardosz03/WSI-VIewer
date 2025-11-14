@@ -22,7 +22,11 @@
     console.log('[INIT] Filename:', filename);
 
     // COSTANTI
-    const TILE_SIZE = 512;
+    const DEFAULT_TILE_SIZE = 256;
+    const ALLOWED_TILE_SIZE = [64, 128, 256, 512];
+    // TILE_SIZE sarà inizializzato dopo aver letto i metadata; se non
+    // disponibili, useremo DEFAULT_TILE_SIZE
+    let TILE_SIZE = DEFAULT_TILE_SIZE;
     let metadata = null;
     let currentZoom = 1.0;  
     let offsetX = 0;
@@ -39,10 +43,9 @@
         const resp = await fetch(`/slide/${filename}/info`);
         if (!resp.ok) throw new Error(`Metadata fetch failed: ${resp.status}`);
         const data = await resp.json();
-        console.log('[METADATA] Ricevuti:', data);
+        console.log('[METADATA] Received:', data);
         return data;
     }
-
 
 
     // RICHIEDERE UN TILE AL SERVER
@@ -76,7 +79,7 @@
 
 
 
-    // SCELTA DEL LIVELLO DI ZOOM APPROPRIATO
+    // SCELTA DEL LIVELLO DI ZOOM APPROPRIATO --> min(|level - 1/zoomFactor|)
     function chooseLevel(zoomFactor) {
         if (!metadata) return 0;
         const ds = metadata.level_downsamples;
@@ -90,7 +93,7 @@
                 best = i;
             }
         }
-        console.debug(`[ZOOM] chooseLevel(${zoomFactor.toFixed(3)}) -> L${best} (downsample=${ds[best].toFixed(3)})`);
+        console.debug(`[ZOOM] Zoom: ${zoomFactor.toFixed(2)} --> Level = ${best}`);
         return best;
     }
 
@@ -101,28 +104,39 @@
         const downsample = metadata.level_downsamples[level];
         const levelDims = metadata.level_dimensions[level];
         const [levelW, levelH] = levelDims;
+        console.log("[META] Level:", level);
+        console.log("[META] Level dims:", metadata.level_dimensions[level]);
 
-        const viewX0 = offsetX;
-        const viewY0 = offsetY;
-        const viewX1 = offsetX + canvas.width / currentZoom;
-        const viewY1 = offsetY + canvas.height / currentZoom;
+        // COORDINATE IN LIVELLO BASE
+        const lev_1_topleft_X = offsetX;
+        const lev_1_topleft_Y = offsetY;
+        const lev_1_bottomright_X = offsetX + canvas.width / currentZoom;
+        const lev_1_bottomright_Y = offsetY + canvas.height / currentZoom;
+        console.log(`[CANVAS] Canvas width=${canvas.width} ; height=${canvas.height}`)
 
-        const x0 = Math.floor(viewX0 / downsample);
-        const y0 = Math.floor(viewY0 / downsample);
-        const x1 = Math.ceil(viewX1 / downsample);
-        const y1 = Math.ceil(viewY1 / downsample);
+        // COORDINATE IN LIVELLO CORRENTE
+        const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
+        const cur_lev_topleft_Y = Math.floor(lev_1_topleft_Y / downsample);
+        const cur_lev_bottomright__X = Math.ceil(lev_1_bottomright_X / downsample);
+        const cur_lev_bottomright__Y = Math.ceil(lev_1_bottomright_Y / downsample);
+        console.log(`[CANVAS] downsample: ${downsample}`)
+        console.log(`[CANVAS] lev_1_top_left: ${lev_1_topleft_X}, ${lev_1_topleft_Y}; lev_1_bottom_right: ${lev_1_bottomright_X}, ${lev_1_bottomright_Y}`)
+        console.log(`[CANVAS] cur_lev_top_left: ${cur_lev_topleft_X}, ${cur_lev_topleft_Y}; cur_lev_bottom_right: ${cur_lev_bottomright__X}, ${cur_lev_bottomright__Y}` )
 
-        const tx0 = Math.floor(x0 / TILE_SIZE);
-        const ty0 = Math.floor(y0 / TILE_SIZE);
-        const tx1 = Math.floor(x1 / TILE_SIZE);
-        const ty1 = Math.floor(y1 / TILE_SIZE);
+        const topleft_tile_X = Math.floor(cur_lev_topleft_X / TILE_SIZE);
+        const topleft_tile_Y = Math.floor(cur_lev_topleft_Y / TILE_SIZE);
+        const bottomright_tile_X = Math.floor(cur_lev_bottomright__X / TILE_SIZE);
+        const bottomright_tile_Y = Math.floor(cur_lev_bottomright__Y / TILE_SIZE);
+        console.log(`[CANVAS] tile_topleft: (${topleft_tile_X}, ${topleft_tile_Y})`)
+        console.log(`[CANVAS] tile_bottom_right: (${bottomright_tile_X}, ${bottomright_tile_Y})`)
 
         const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
         const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
+        console.log(`[CANVAS] maxTileCol: ${maxTileCol}, maxTileRow: ${maxTileRow}`)
 
         const tiles = [];
-        for (let col = Math.max(0, tx0); col <= Math.min(tx1, maxTileCol); col++) {
-            for (let row = Math.max(0, ty0); row <= Math.min(ty1, maxTileRow); row++) {
+        for (let col = Math.max(0, topleft_tile_X); col <= Math.min(bottomright_tile_X, maxTileCol); col++) {
+            for (let row = Math.max(0, topleft_tile_Y); row <= Math.min(bottomright_tile_Y, maxTileRow); row++) {
                 tiles.push({ level, col, row });
             }
         }
@@ -145,27 +159,53 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            for (const tile of tiles) {
-                try {
-                    const img = await requestTile(tile.level, tile.col, tile.row);
+            
+            // VERSIONE CICLO FOR, LENTA
+            //for (const tile of tiles) {
+                //try {
+                    //const img = await requestTile(tile.level, tile.col, tile.row);
                     
-                    const tileX = tile.col * TILE_SIZE * downsample;
-                    const tileY = tile.row * TILE_SIZE * downsample;
+                    //const tileX = tile.col * TILE_SIZE * downsample;
+                    //const tileY = tile.row * TILE_SIZE * downsample;
 
-                    const drawX = (tileX - offsetX) * currentZoom;
-                    const drawY = (tileY - offsetY) * currentZoom;
-                    const drawW = TILE_SIZE * downsample * currentZoom;
-                    const drawH = TILE_SIZE * downsample * currentZoom;
+                    //const drawX = (tileX - offsetX) * currentZoom;
+                    //const drawY = (tileY - offsetY) * currentZoom;
+                    //const drawW = TILE_SIZE * downsample * currentZoom;
+                    //const drawH = TILE_SIZE * downsample * currentZoom;
 
-                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
-                } catch (err) {
-                    console.error('[RENDER] Errore nel rendering del tile:', err);
+                    //ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                //} catch (err) {
+                    //console.error('[RENDER] Errore nel rendering del tile:', err);
+                //}
+            //}
+
+            // VERSIONE PARALLELIZZATA
+            const tilePromeses = tiles.map(async (tile) => {
+                try{
+                    const img = await requestTile(tile.level, tile.col, tile.row);
+                    const t_orig_X = tile.col * TILE_SIZE * downsample;
+                    const t_orig_Y = tile.row * TILE_SIZE * downsample;
+
+                    const t_pos_X = (t_orig_X - offsetX) * currentZoom;
+                    const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
+
+                    const t_weight = TILE_SIZE * downsample * currentZoom;
+                    const t_height = TILE_SIZE * downsample * currentZoom
+
+                    ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+                } catch(error) {
+                    console.error('[RENDER] Errore nel renderng del tile:', error)
                 }
-            }
+            });
+
+            await Promise.all(tilePromeses)
+
             document.getElementById('info-current-level').textContent = level;
+            document.getElementById('info-current-level-dims').textContent = `${metadata.level_dimensions[level][0]} × ${metadata.level_dimensions[level][1]}`;
+            document.getElementById('info-current-level-downs').textContent = `${metadata.level_downsamples[level].toFixed(1)}`;
             document.getElementById('info-visible-tiles').textContent = tiles.length;
-            document.getElementById('info-tile-size').textContent = TILE_SIZE
+            document.getElementById('info-tile-size').textContent = TILE_SIZE;
+            document.getElementById('info-offset-display').textContent = `${offsetX}, ${offsetY}`;
 
             console.debug(`[RENDER] Frame completo - zoom=${currentZoom.toFixed(3)}, offset=(${offsetX},${offsetY})`);
         } catch (err) {
@@ -191,7 +231,7 @@
 
     function clampZoom(z) {
         const initialFit = Math.min(1.0, Math.max((window.__INITIAL_FIT_ZOOM__ || 0.2), MIN_ZOOM));
-        const minAllowed = Math.max(MIN_ZOOM, initialFit * 0.2);
+        const minAllowed = Math.max(MIN_ZOOM, initialFit);
         const maxAllowed = MAX_ZOOM;
         return Math.max(minAllowed, Math.min(z, maxAllowed));
     }
@@ -290,6 +330,8 @@
         return;
     }
 
+    
+
     if (metadata && metadata.properties) {
         const vendor = metadata.properties["openslide.vendor"] || "N.D";
         document.getElementById('info-producer').textContent = vendor
@@ -299,6 +341,8 @@
     document.getElementById('info-dims').textContent = metadata.level_dimensions.map(d => `(${d[0]}×${d[1]})`).join(', ');
     document.getElementById('info-downsamples').textContent = metadata.level_downsamples.map(d => d.toFixed(1)).join(', ');
 
+    
+
 
     const viewportW = window.innerWidth * 0.9;
     const viewportH = window.innerHeight * 0.9;
@@ -307,11 +351,60 @@
     currentZoom = Math.min(scaleW, scaleH, 1.0);
     window.__INITIAL_FIT_ZOOM__ = currentZoom;
 
+    // Inizializza TILE_SIZE dai metadata se il server lo fornisce e se è permesso,
+    // altrimenti mantieni DEFAULT_TILE_SIZE.
+    if (metadata && metadata.tile_size) {
+        const t = parseInt(metadata.tile_size);
+        if (ALLOWED_TILE_SIZE.includes(t)) {
+            TILE_SIZE = t;
+            console.log(`[INIT] TILE_SIZE inizializzato dai metadata: ${TILE_SIZE}`);
+        } else {
+            TILE_SIZE = DEFAULT_TILE_SIZE;
+            console.log(`[INIT] TILE_SIZE metadata non valido (${metadata.tile_size}), uso default: ${TILE_SIZE}`);
+        }
+    } else {
+        TILE_SIZE = DEFAULT_TILE_SIZE;
+        console.log(`[INIT] TILE_SIZE non fornito nei metadata, uso default: ${TILE_SIZE}`);
+    }
+
+    // Gestione del selettore tile size se presente nella pagina
+    const tileSelector = document.getElementById('tileSizeSelector');
+    if (tileSelector) {
+        // Imposta il valore corrente
+        try { tileSelector.value = String(TILE_SIZE); } catch(e) {}
+
+        tileSelector.addEventListener('change', async (ev) => {
+            const newVal = parseInt(ev.target.value);
+            if (!ALLOWED_TILE_SIZE.includes(newVal)) {
+                alert('Valore tile size non consentito');
+                ev.target.value = String(TILE_SIZE);
+                return;
+            }
+
+            // Disabilita il selettore mentre cambiamo la configurazione
+            tileSelector.disabled = true;
+            try {
+                console.log(`[TILE] Cambio TILE_SIZE client-side: ${TILE_SIZE} -> ${newVal}`);
+                TILE_SIZE = newVal;
+                // Svuota la cache client e richiedi un nuovo render
+                tileCache.clear();
+                await render();
+            } catch (err) {
+                console.error('[TILE] Errore cambiando tile size:', err);
+                alert('Errore cambiando tile size');
+            } finally {
+                tileSelector.disabled = false;
+            }
+        });
+    }
+
+    // NON FONDAMENTALE
     const deviceRatio = window.devicePixelRatio || 1;
+
     const canvasW = Math.round(fullImageW * currentZoom);
     const canvasH = Math.round(fullImageH * currentZoom);
-    canvas.width = canvasW;
-    canvas.height = canvasH;
+    canvas.width = canvasW * deviceRatio;
+    canvas.height = canvasH * deviceRatio;
 
     offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
     offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);

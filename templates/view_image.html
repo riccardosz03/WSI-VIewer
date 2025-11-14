@@ -19,6 +19,16 @@
                 <button onclick="window.location.href='/'" class="toolbar-btn">⬅</button>
             </div>
 
+            <div class="tile-size-control" style="margin-top:12px; width:100%; text-align:center;">
+                <label for="tileSizeSelector" style="color:#333; font-weight:600; display:block; margin-bottom:6px;">Tile size</label>
+                <select id="tileSizeSelector" style="padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
+                    <option value="64">64</option>
+                    <option value="128">128</option>
+                    <option value="256" selected>256</option>
+                    <option value="512">512</option>
+                </select>
+            </div>
+
            <div class="info-panel">
                 <h3>Dettagli immagine</h3>
                 <table class="info-table-horizontal">
@@ -28,9 +38,12 @@
                     <tr><th>Livelli</th><td id="info-levels">–</td></tr>
                     <tr><th>Dimensioni dei livelli</th><td id="info-dims">–</td></tr>
                     <tr><th>Downsamples</th><td id="info-downsamples">–</td></tr>
-                    <tr><th>Livello corrente</th><td id="info-current-level">–</td></tr>
+                    <tr><th style="color: blue">Livello corrente</th><td id="info-current-level">–</td></tr>
+                    <tr><th style="color: blue">Dimensioni livello corrente</th><td id="info-current-level-dims">–</td></tr>
+                    <tr><th style="color: blue">Downsample livello corrente</th><td id="info-current-level-downs">–</td></tr>
                     <tr><th>Tile visibili</th><td id="info-visible-tiles">–</td></tr>
                     <tr><th>Tile size</th><td id="info-tile-size">–</td></tr>
+                    <tr><th>Offset display</th><td id="info-offset-display">–</td></tr>
                     </tbody>
                 </table>
             </div>
