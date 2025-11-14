@@ -1,22 +1,18 @@
 from flask import Flask, send_file, request, render_template, redirect, url_for, jsonify
-from PIL import Image
 import io, os
 from openslide import open_slide
 from openslide.deepzoom import DeepZoomGenerator
 
 
 app = Flask(__name__)
-#qui vengono salvati i file caricati
+
 UPLOAD_FOLDER = 'data/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Crea la directory di upload se non esiste
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-#dizioneario per memorizzare gli slide e deepzoomaperti, senza doverli riaprire ogni volta
 SLIDE_CACHE = {}
 DEEPZOOM_CACHE = {}
 TILE_SIZE = 256
+
 
 def slide_path(filename):
     safe = os.path.basename(filename)
@@ -30,15 +26,15 @@ def print_log(dz):
     print(f"Total number of tiles : {dz.tile_count}")
 
 
-# Route per la home page
+
+# HOME PAGE
 @app.route('/')
 def home():
     return render_template('index.html')
 
 
-#riceve il file dal form HTML
-#verifica che sia un file .svs e lo salva nella cartella di upload
-#stampa un messaggio di successo e reindirizza alla pagina di visualizzazione
+
+# RICEVE FILE WSI DAL SERVER
 @app.route('/upload', methods=['POST'])
 def upload_file():
     file = request.files['file']
@@ -51,10 +47,7 @@ def upload_file():
     
 
 
-#controlla se il file esiste
-#se non è già in cache, lo apre e lo memorizza
-#recupera le dimensioni dell'immagine
-#mostra la pagina view_image.html con i dati necessari per visualizzare l'immagine
+# VISUALIZZA FILE WSI
 @app.route('/view_image/<filename>')
 def view_file(filename):
     path = slide_path(filename)
@@ -75,32 +68,21 @@ def get_deepzoom(filename):
     return DEEPZOOM_CACHE[filename]
 
 
-#Restituisce un oggeto JSON con:
-#dimensioni dell'immagine
-#numero di livelli
-#dimensione per ogni livello
-#fattore di downsample per ogni livello
-#proprietà dello slide
+
+# PROPRIETA' DELLA SLIDE
 @app.route('/slide/<filename>/info')
 def slide_info(filename):
     print(f"\n[INFO] Richiesta info per file: {filename}")
     slide = get_slide(filename)
     dz = get_deepzoom(filename)
-
-    # DeepZoomGenerator may not expose level_downsamples directly. Calcoliamo
-    # i fattori di downsample a partire dalle dimensioni per livello fornite
-    # da DeepZoomGenerator rispetto alle dimensioni originali dello slide.
     level_dimensions = dz.level_dimensions
     level_downsamples = []
     try:
         full_width = slide.dimensions[0]
         for (w, h) in level_dimensions:
-            # downsample rispetto al livello 0 (immagine completa)
-            # evitiamo divisione per zero
             ds = float(full_width) / float(w) if w != 0 else 1.0
             level_downsamples.append(ds)
     except Exception:
-        # fallback: usa i downsample nativi dello slide se presenti
         level_downsamples = list(getattr(slide, 'level_downsamples', []))
 
     print(f"  Dimensioni immagine: {slide.dimensions}")
@@ -118,25 +100,18 @@ def slide_info(filename):
 
 
 
-#riceve le coordinate x, y, level e size via query string
-#calcola la posizione nel livello 0
-#usa read_region per leggere un tile
-#lo converte in PNG e lo restituisce al frontend
+# FORNISCE I TILE PER OGNI LIVELLO
 @app.route('/slide/<filename>/tile')
 def slide_tile(filename):
-    # Accetta sia parametri 'col'/'row' che 'x'/'y' (client potrebbe inviare nomi diversi)
     try:
         level = int(request.args.get('level', 0))
     except ValueError:
         return 'Parametro level non valido', 400
 
-    # supporta sia 'col'/'row' che 'x'/'y'
     col_arg = request.args.get('col') if request.args.get('col') is not None else request.args.get('x')
     row_arg = request.args.get('row') if request.args.get('row') is not None else request.args.get('y')
 
     if col_arg is None or row_arg is None:
-        # Fall back to 0,0 if missing — this makes quick manual tests in a browser
-        # (without query parameters) return a tile instead of an error. We still log it.
         print(f"[TILE] Parametri col/row mancanti per file={filename}, defaulting to 0,0")
         col = 0
         row = 0
@@ -147,13 +122,8 @@ def slide_tile(filename):
         except ValueError:
             return 'Parametri col/row non validi', 400
 
-    # Log request details for debugging
     print(f"[TILE] Richiesta tile: file={filename} level={level} col={col} row={row}")
-
-    #dz è una variabile DeepZoomGenerator
     dz = get_deepzoom(filename)
-
-    #controllo se il livello richiesto è valido
     w, h = dz.level_dimensions[level]
     max_col = (w + TILE_SIZE - 1) // TILE_SIZE
     max_row = (h + TILE_SIZE - 1) // TILE_SIZE
@@ -176,43 +146,30 @@ def slide_tile(filename):
     buf.seek(0)
     print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
     return send_file(buf, mimetype='image/png')
-    
 
 
 
-#riceve la larghezza desiderata via query string
-#calcola l'altezza proporzionale
-#genera una miniatura dell'immagine con get_thumbnail
-#la restituisce come PNG ad alta qualità
+# GENERA UNA MINIATURA DELL'IMMAGINE
 @app.route('/slide/<filename>/thumbnail')
 def slide_thumbnail(filename):
-    width = int(request.args.get('width', 1024))  # default 1024px per buona qualità
+    width = int(request.args.get('width', 1024))
     slide = get_slide(filename)
     w0, h0 = slide.level_dimensions[0]
     
-    # Calcola l'altezza mantenendo le proporzioni
     height = int((width / w0) * h0)
     
-    # Usa get_thumbnail di OpenSlide (è ottimizzato per le immagini WSI)
     thumb = slide.get_thumbnail((width, height)).convert('RGB')
     
-    # Salva il buffer per il client
     buf = io.BytesIO()
-    # Salva con qualità massima
     thumb.save(buf, format='PNG', compress_level=9)
     
-    # Opzionale: salva anche una copia locale per debug
     try:
         thumb.save(f'tmp/thumbnails/thumbnail_{filename}_{width}x{height}.png', format='PNG', compress_level=9)
     except:
-        pass  # ignora errori di salvataggio locale
-    
+        pass
     buf.seek(0)
     print(f"[THUMBNAIL] Generata miniatura per {filename} con dimensioni {width}x{height}")
     return send_file(buf, mimetype='image/png')
-
-
-
 
 
 if __name__ == '__main__':
