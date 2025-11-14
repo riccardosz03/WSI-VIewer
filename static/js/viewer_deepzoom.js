@@ -23,9 +23,7 @@
 
     // COSTANTI
     const DEFAULT_TILE_SIZE = 256;
-    const ALLOWED_TILE_SIZE = [64, 128, 256, 512];
-    // TILE_SIZE sarà inizializzato dopo aver letto i metadata; se non
-    // disponibili, useremo DEFAULT_TILE_SIZE
+  
     let TILE_SIZE = DEFAULT_TILE_SIZE;
     let metadata = null;
     let currentZoom = 1.0;  
@@ -39,11 +37,11 @@
 
     // RECUPERARE I METADATI
     async function fetchMetadata() {
-        console.log('[METADATA] Fetching metadata...');
+        console.log('[FETCH] Fetching metadata...');
         const resp = await fetch(`/slide/${filename}/info`);
         if (!resp.ok) throw new Error(`Metadata fetch failed: ${resp.status}`);
         const data = await resp.json();
-        console.log('[METADATA] Received:', data);
+        console.log('[FETCH] Received:', data);
         return data;
     }
 
@@ -112,27 +110,27 @@
         const lev_1_topleft_Y = offsetY;
         const lev_1_bottomright_X = offsetX + canvas.width / currentZoom;
         const lev_1_bottomright_Y = offsetY + canvas.height / currentZoom;
-        console.log(`[CANVAS] Canvas width=${canvas.width} ; height=${canvas.height}`)
+        console.log(`[META] Canvas width=${canvas.width} ; height=${canvas.height}`)
 
         // COORDINATE IN LIVELLO CORRENTE
         const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
         const cur_lev_topleft_Y = Math.floor(lev_1_topleft_Y / downsample);
         const cur_lev_bottomright__X = Math.ceil(lev_1_bottomright_X / downsample);
         const cur_lev_bottomright__Y = Math.ceil(lev_1_bottomright_Y / downsample);
-        console.log(`[CANVAS] downsample: ${downsample}`)
-        console.log(`[CANVAS] lev_1_top_left: ${lev_1_topleft_X}, ${lev_1_topleft_Y}; lev_1_bottom_right: ${lev_1_bottomright_X}, ${lev_1_bottomright_Y}`)
-        console.log(`[CANVAS] cur_lev_top_left: ${cur_lev_topleft_X}, ${cur_lev_topleft_Y}; cur_lev_bottom_right: ${cur_lev_bottomright__X}, ${cur_lev_bottomright__Y}` )
+        console.log(`[META] downsample: ${downsample}`)
+        console.log(`[META] lev_1_top_left: ${lev_1_topleft_X}, ${lev_1_topleft_Y}; lev_1_bottom_right: ${lev_1_bottomright_X}, ${lev_1_bottomright_Y}`)
+        console.log(`[META] cur_lev_top_left: ${cur_lev_topleft_X}, ${cur_lev_topleft_Y}; cur_lev_bottom_right: ${cur_lev_bottomright__X}, ${cur_lev_bottomright__Y}` )
 
         const topleft_tile_X = Math.floor(cur_lev_topleft_X / TILE_SIZE);
         const topleft_tile_Y = Math.floor(cur_lev_topleft_Y / TILE_SIZE);
         const bottomright_tile_X = Math.floor(cur_lev_bottomright__X / TILE_SIZE);
         const bottomright_tile_Y = Math.floor(cur_lev_bottomright__Y / TILE_SIZE);
-        console.log(`[CANVAS] tile_topleft: (${topleft_tile_X}, ${topleft_tile_Y})`)
-        console.log(`[CANVAS] tile_bottom_right: (${bottomright_tile_X}, ${bottomright_tile_Y})`)
+        console.log(`[META] tile_topleft: (${topleft_tile_X}, ${topleft_tile_Y})`)
+        console.log(`[META] tile_bottom_right: (${bottomright_tile_X}, ${bottomright_tile_Y})`)
 
         const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
         const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
-        console.log(`[CANVAS] maxTileCol: ${maxTileCol}, maxTileRow: ${maxTileRow}`)
+        console.log(`[META] maxTileCol: ${maxTileCol}, maxTileRow: ${maxTileRow}`)
 
         const tiles = [];
         for (let col = Math.max(0, topleft_tile_X); col <= Math.min(bottomright_tile_X, maxTileCol); col++) {
@@ -140,7 +138,7 @@
                 tiles.push({ level, col, row });
             }
         }
-        console.debug(`[RENDER] Level ${level}: ${tiles.length} tile visibili`);
+        console.debug(`[META] Level ${level}: ${tiles.length} tile visibili`);
         return tiles;
     }
 
@@ -351,52 +349,7 @@
     currentZoom = Math.min(scaleW, scaleH, 1.0);
     window.__INITIAL_FIT_ZOOM__ = currentZoom;
 
-    // Inizializza TILE_SIZE dai metadata se il server lo fornisce e se è permesso,
-    // altrimenti mantieni DEFAULT_TILE_SIZE.
-    if (metadata && metadata.tile_size) {
-        const t = parseInt(metadata.tile_size);
-        if (ALLOWED_TILE_SIZE.includes(t)) {
-            TILE_SIZE = t;
-            console.log(`[INIT] TILE_SIZE inizializzato dai metadata: ${TILE_SIZE}`);
-        } else {
-            TILE_SIZE = DEFAULT_TILE_SIZE;
-            console.log(`[INIT] TILE_SIZE metadata non valido (${metadata.tile_size}), uso default: ${TILE_SIZE}`);
-        }
-    } else {
-        TILE_SIZE = DEFAULT_TILE_SIZE;
-        console.log(`[INIT] TILE_SIZE non fornito nei metadata, uso default: ${TILE_SIZE}`);
-    }
-
-    // Gestione del selettore tile size se presente nella pagina
-    const tileSelector = document.getElementById('tileSizeSelector');
-    if (tileSelector) {
-        // Imposta il valore corrente
-        try { tileSelector.value = String(TILE_SIZE); } catch(e) {}
-
-        tileSelector.addEventListener('change', async (ev) => {
-            const newVal = parseInt(ev.target.value);
-            if (!ALLOWED_TILE_SIZE.includes(newVal)) {
-                alert('Valore tile size non consentito');
-                ev.target.value = String(TILE_SIZE);
-                return;
-            }
-
-            // Disabilita il selettore mentre cambiamo la configurazione
-            tileSelector.disabled = true;
-            try {
-                console.log(`[TILE] Cambio TILE_SIZE client-side: ${TILE_SIZE} -> ${newVal}`);
-                TILE_SIZE = newVal;
-                // Svuota la cache client e richiedi un nuovo render
-                tileCache.clear();
-                await render();
-            } catch (err) {
-                console.error('[TILE] Errore cambiando tile size:', err);
-                alert('Errore cambiando tile size');
-            } finally {
-                tileSelector.disabled = false;
-            }
-        });
-    }
+   
 
     // NON FONDAMENTALE
     const deviceRatio = window.devicePixelRatio || 1;

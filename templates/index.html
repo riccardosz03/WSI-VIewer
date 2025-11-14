@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WSI Viewer</title>
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="stylesheet" href="/static/css/upload.css">
+  <link rel="stylesheet" href="/static/css/style_upload.css">
 </head>
 <body>
 
@@ -15,7 +14,7 @@
 
   <label class="upload-box" for="fileInput">
     Trascina qui il tuo file WSI o clicca per selezionarlo
-    <input type="file" id="fileInput" accept=".svs,.tiff,.ndpi,.mrxs,.vms,.vmu,.scn,.bif,.tif" />
+    <input type="file" id="fileInput" accept=".svs" />
   </label>
 
   <div id="progress-container" style="display: none;">
@@ -24,7 +23,7 @@
   </div>
 
   <div class="info">
-    File WSI supportati: .svs, .tiff, .ndpi, .mrxs, .vms, .vmu, .scn, .bif, .tif
+    File WSI supportati: .svs
   </div>
 
   <script src="/static/js/upload.js"></script>
