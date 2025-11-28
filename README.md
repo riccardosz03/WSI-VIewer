@@ -1,7 +1,5 @@
 # WSI Viewer
 
-Visualizzatore di Whole Slide Images con Flask + DeepZoom.
+Visualizzatore di Whole Slide Images con Openslide + DeepZoomGenerator.
 
-## Copertina del progetto
-
-![Screenshot del viewer](./images/cover_wsi.png)
+![Screenshot del viewer](./images/cover_WSI.png)
