@@ -14,7 +14,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 SLIDE_CACHE = {}
 DEEPZOOM_CACHE = {}
 TILE_SIZE = 256
-
+ALLOWED_EXTENSIONS = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrcs', '.tiff', '.svslide', '.bif', '.czi']
 
 def slide_path(filename):
     safe = os.path.basename(filename)
@@ -32,13 +32,14 @@ def home():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     file = request.files['file']
-    if file and file.filename.endswith('.svs'):
+    filename = file.filename.lower()
+
+    if file and any(filename.endswith(ext) for ext in ALLOWED_EXTENSIONS):
         filepath = slide_path(file.filename)
         file.save(filepath)
         print(f"File {filepath} caricato con successo.")
         return redirect(url_for('view_file', filename=file.filename))
     return 'Formato file non supportato', 400
-    
 
 
 # CREA UN OGGETTO DEEPZOOMGENERATOR

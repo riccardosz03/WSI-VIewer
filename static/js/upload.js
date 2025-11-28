@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const uploadBox = document.querySelector('.upload-box');
     const fileInput = document.getElementById('fileInput');
+    const allowedExtensions = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrcs', '.tiff', '.svslide', '.bif', '.czi'];
 
     // PREVENIRE IL COMPORTAMENTO DEL BROWSER PER IL DRAG AND DROP
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -48,8 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleFile(file) {
         if (!file) return;
 
-        if (!file.name.toLowerCase().endsWith('.svs')) {
-            alert('Carica un file .svs');
+        const filename = file.name.toLowerCase();
+        const isValid = allowedExtensions.some(ext => filename.endsWith(ext));
+        if (!isValid){
+            alert('Tipo file non supportato');
             return;
         }
 
