@@ -8,7 +8,7 @@
 </head>
 <body class="viewer-page">
     <div class="viewer-layout">
-        <!-- Left Panel: Toolbar -->
+        <!-- Left Panel: Toolbar + Thumbnail-->
         <div class="left-panel">
             <h2 class="viewer-title">{{ filename }}</h2>
             <div class="toolbar">
@@ -36,7 +36,16 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="info-panel">
+                <h3>Anteprima Slide</h3>
+                <div class="thumbnail-wrapper">
+                    <canvas id="thumbCanvas" width="500" height="500" aria-label="miniatura della slide"></canvas>
+                </div>
+            </div>
         </div>
+
+
 
         <!-- Right Panel: Canvas -->
         <div class="right-panel">

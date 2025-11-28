@@ -211,4 +211,20 @@ body.viewer-page {
   color: #2b6ef6;
 }
 
+.thumbnail-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0;
+}
+
+#thumbCanvas {
+  width: 500px;
+  height: 500px;
+  background: black;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px black;
+  cursor: crosshair
+}
+
 

@@ -34,6 +34,39 @@
     const tileCache = new Map();
     let isRendering = false;
 
+    // MAPPA-THUMBNAIL
+    const thumbCanvas = document.getElementById('thumbCanvas');
+    const thumbCtx = thumbCanvas.getContext('2d');
+    const thumbImg = new Image();
+    thumbImg.onload = () => {
+        thumbCtx.drawImage(thumbImg, 0, 0, thumbCanvas.width, thumbCanvas.height);
+    };
+    thumbImg.src = `/slide/${filename}/thumbnail`;
+
+    // AGGIORNA LA MAPPA-THUMBNAIL
+    function updateMap() {
+        thumbCtx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+        thumbCtx.drawImage(thumbImg, 0, 0, thumbCanvas.width, thumbCanvas.height);
+
+        const viewX = offsetX;
+        const viewY = offsetY;
+        const viewW = canvas.width / currentZoom;
+        const viewH = canvas.height / currentZoom;
+
+        const scaleX = thumbCanvas.width / fullImageW;
+        const scaleY = thumbCanvas.height / fullImageH;
+
+        const rectX = viewX * scaleX;
+        const rectY = viewY * scaleY;
+        const rectW = viewW * scaleX;
+        const rectH = viewH * scaleY;
+
+        thumbCtx.strokeStyle = 'red';
+        thumbCtx.lineWidth = 2;
+        thumbCtx.strokeRect(rectX, rectY, rectW, rectH);
+    }
+
+
 
     // RECUPERARE I METADATI
     async function fetchMetadata() {
@@ -44,7 +77,6 @@
         console.log('[FETCH] Received:', data);
         return data;
     }
-
 
     // RICHIEDERE UN TILE AL SERVER
     async function requestTile(level, col, row) {
@@ -211,6 +243,7 @@
         } finally {
             isRendering = false;
         }
+        updateMap();
     }
 
 
