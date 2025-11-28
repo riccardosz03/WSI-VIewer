@@ -50,16 +50,25 @@
 
         const viewX = offsetX;
         const viewY = offsetY;
+        console.log(`[MAP] viewX: ${viewX}, viewY: ${viewY}`)
+        
         const viewW = canvas.width / currentZoom;
         const viewH = canvas.height / currentZoom;
+        console.log(`[MAP] viewW: ${viewW}, viewH: ${viewH}`)
+        console.log(`[MAP] Canvas width ${canvas.width}, canvasHeight: ${canvas.height}`)
+        console.log(`[MAP] currentZoom: ${currentZoom}`)
 
         const scaleX = thumbCanvas.width / fullImageW;
         const scaleY = thumbCanvas.height / fullImageH;
+        console.log(`[MAP] scaleX: ${scaleX}, scaleY: ${scaleY}`)
+    
 
         const rectX = viewX * scaleX;
         const rectY = viewY * scaleY;
         const rectW = viewW * scaleX;
         const rectH = viewH * scaleY;
+        console.log(`[MAP] rectX: ${rectX}, rectY: ${rectY}`)
+        console.log(`[MAP] rectW: ${rectW}, rectH: ${rectH}`)
 
         thumbCtx.strokeStyle = 'red';
         thumbCtx.lineWidth = 2;

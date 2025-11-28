@@ -153,7 +153,7 @@ def slide_tile(filename):
 
 
 
-# MOSTRA UNA THUMBNAIL DELLA SLIDE, NON ANCORA IN USO
+# MOSTRA UNA THUMBNAIL DELLA SLIDE, SERVE PER LA MAPPATURA DELLA SLIDE IN TEMPO REALE
 @app.route('/slide/<filename>/thumbnail')
 def slide_thumbnail(filename):
     width = int(request.args.get('width', 1024)) 
