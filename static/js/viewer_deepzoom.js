@@ -139,7 +139,7 @@
 
 
     // CALCOLO DEI TILE VISIBILI
-    function computeVisibleTiles(level) {
+    function computeVisibleLevelTiles(level) {
         const downsample = metadata.level_downsamples[level];
         const levelDims = metadata.level_dimensions[level];
         const [levelW, levelH] = levelDims;
@@ -183,6 +183,42 @@
         return tiles;
     }
 
+    // TODO FUNZIONE PER OTTENERE TUTTI I TILE DA UN LIVELLO IN POI
+    function computeallLevelsTiles(level) {
+        const allTiles =  [];
+
+        for (let lev = level; lev < metadata.level_downsamples.length; lev++) {
+            const downsample = metadata.level_downsamples[lev];
+            const levelDims = metadata.level_dimensions[lev];
+            const [levelW, levelH] = levelDims;
+
+            const lev_1_topleft_X = offsetX;
+            const lev_1_topleft_Y = offsetY;
+            const lev_1_bottomright_X = offsetX + canvas.width / currentZoom;
+            const lev_1_bottomright_Y = offsetY + canvas.height / currentZoom;
+
+            const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
+            const cur_lev_topleft_Y = Math.floor(lev_1_topleft_Y / downsample);
+            const cur_lev_bottomright__X = Math.ceil(lev_1_bottomright_X / downsample);
+            const cur_lev_bottomright__Y = Math.ceil(lev_1_bottomright_Y / downsample);
+
+            const topleft_tile_X = Math.floor(cur_lev_topleft_X / TILE_SIZE);
+            const topleft_tile_Y = Math.floor(cur_lev_topleft_Y / TILE_SIZE);
+            const bottomright_tile_X = Math.floor(cur_lev_bottomright__X / TILE_SIZE);
+            const bottomright_tile_Y = Math.floor(cur_lev_bottomright__Y / TILE_SIZE);
+
+            const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
+            const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
+
+            for (let col = Math.max(0, topleft_tile_X); col <= Math.min(bottomright_tile_X, maxTileCol); col++) {
+                for (let row = Math.max(0, topleft_tile_Y); row <= Math.min(bottomright_tile_Y, maxTileRow); row++) {
+                    allTiles.push({ level: lev, col, row });
+                }
+            }
+        }
+        console.debug(`[TILE] From Level ${level} to ${metadata.level_downsamples.length-1}: ${allTiles.length} tile visibili`);
+        return allTiles;
+    }
 
 
     // RENDERING
@@ -193,7 +229,7 @@
         try {
             const level = chooseLevel(currentZoom);
             const downsample = metadata.level_downsamples[level];
-            const tiles = computeVisibleTiles(level);
+            const tiles = computeVisibleLevelTiles(level);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#000';
