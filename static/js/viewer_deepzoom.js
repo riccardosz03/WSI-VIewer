@@ -270,8 +270,8 @@
     const MAX_ZOOM = 16.0; 
 
     function clampZoom(z) {
-        const initialFit = Math.min(1.0, Math.max((window.__INITIAL_FIT_ZOOM__ || 0.2), MIN_ZOOM));
-        const minAllowed = Math.max(MIN_ZOOM, initialFit);
+        const initialFit = window.__INITIAL_FIT_ZOOM__ || 1.0;
+        const minAllowed = initialFit
         const maxAllowed = MAX_ZOOM;
         return Math.max(minAllowed, Math.min(z, maxAllowed));
     }
