@@ -36,15 +36,18 @@
 
     // MAPPA-THUMBNAIL
     const thumbCanvas = document.getElementById('thumbCanvas');
-    const thumbCtx = thumbCanvas.getContext('2d');
+    const thumbCtx = thumbCanvas ? thumbCanvas.getContext('2d') : null;
     const thumbImg = new Image();
     thumbImg.onload = () => {
-        thumbCtx.drawImage(thumbImg, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        if (thumbCtx && thumbCanvas) {
+            thumbCtx.drawImage(thumbImg, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        }
     };
     thumbImg.src = `/slide/${filename}/thumbnail`;
 
     // AGGIORNA LA MAPPA-THUMBNAIL
     function updateMap() {
+        if (!thumbCtx || !thumbCanvas) return;
         thumbCtx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
         thumbCtx.drawImage(thumbImg, 0, 0, thumbCanvas.width, thumbCanvas.height);
 
@@ -139,44 +142,67 @@
 
 
 
-    // CALCOLO DEI TILE VISIBILI: ottimizzato per uno o più livelli
-    // @param levelStart: livello di inizio (incluso)
-    // @param levelEnd: livello di fine (esclusivo, default=levelStart+1)
-    function computeVisibleTiles(levelStart, levelEnd = null) {
+    function computeVisibleLevelTiles(level) {
+        const downsample = metadata.level_downsamples[level];
+        const levelDims = metadata.level_dimensions[level];
+        const [levelW, levelH] = levelDims;
+        console.log("[META] Level:", level);
+        console.log("[META] Level dims:", metadata.level_dimensions[level]);
+
+        // COORDINATE IN LIVELLO BASE
+        const lev_1_topleft_X = offsetX;
+        const lev_1_topleft_Y = offsetY;
+        const lev_1_bottomright_X = offsetX + canvas.width / currentZoom;
+        const lev_1_bottomright_Y = offsetY + canvas.height / currentZoom;
+        console.log(`[META] Canvas width=${canvas.width} ; height=${canvas.height}`)
+
+        // COORDINATE IN LIVELLO CORRENTE
+        const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
+        const cur_lev_topleft_Y = Math.floor(lev_1_topleft_Y / downsample);
+        const cur_lev_bottomright__X = Math.ceil(lev_1_bottomright_X / downsample);
+        const cur_lev_bottomright__Y = Math.ceil(lev_1_bottomright_Y / downsample);
+        console.log(`[META] downsample: ${downsample}`)
+        console.log(`[META] lev_1_top_left: ${lev_1_topleft_X}, ${lev_1_topleft_Y}; lev_1_bottom_right: ${lev_1_bottomright_X}, ${lev_1_bottomright_Y}`)
+        console.log(`[META] cur_lev_top_left: ${cur_lev_topleft_X}, ${cur_lev_topleft_Y}; cur_lev_bottom_right: ${cur_lev_bottomright__X}, ${cur_lev_bottomright__Y}` )
+
+        const topleft_tile_X = Math.floor(cur_lev_topleft_X / TILE_SIZE);
+        const topleft_tile_Y = Math.floor(cur_lev_topleft_Y / TILE_SIZE);
+        const bottomright_tile_X = Math.floor(cur_lev_bottomright__X / TILE_SIZE);
+        const bottomright_tile_Y = Math.floor(cur_lev_bottomright__Y / TILE_SIZE);
+        console.log(`[META] tile_topleft: (${topleft_tile_X}, ${topleft_tile_Y})`)
+        console.log(`[META] tile_bottom_right: (${bottomright_tile_X}, ${bottomright_tile_Y})`)
+
+        const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
+        const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
+        console.log(`[META] maxTileCol: ${maxTileCol}, maxTileRow: ${maxTileRow}`)
+
         const tiles = [];
-        const levels = metadata.level_downsamples.length;
-        const end = levelEnd !== null ? levelEnd : levelStart + 1;
-        
-        // limiti viewport in coordinate livello 0 (calcolati una sola volta)
-        const viewTop = offsetX;
-        const viewLeft = offsetY;
-        const viewRight = offsetX + canvas.width / currentZoom;
-        const viewBottom = offsetY + canvas.height / currentZoom;
-
-        for (let lev = levelStart; lev < end && lev < levels; lev++) {
-            const downsample = metadata.level_downsamples[lev];
-            const [levelW, levelH] = metadata.level_dimensions[lev];
-
-            // trasforma viewport in coordinate livello corrente
-            const lvTileStart_X = Math.floor(viewTop / downsample / TILE_SIZE);
-            const lvTileStart_Y = Math.floor(viewLeft / downsample / TILE_SIZE);
-            const lvTileEnd_X = Math.floor(viewRight / downsample / TILE_SIZE);
-            const lvTileEnd_Y = Math.floor(viewBottom / downsample / TILE_SIZE);
-
-            const maxCol = Math.ceil(levelW / TILE_SIZE) - 1;
-            const maxRow = Math.ceil(levelH / TILE_SIZE) - 1;
-
-            // accumula tile visibili per questo livello
-            for (let col = Math.max(0, lvTileStart_X); col <= Math.min(lvTileEnd_X, maxCol); col++) {
-                for (let row = Math.max(0, lvTileStart_Y); row <= Math.min(lvTileEnd_Y, maxRow); row++) {
-                    tiles.push({ level: lev, col, row });
-                }
+        for (let col = Math.max(0, topleft_tile_X); col <= Math.min(bottomright_tile_X, maxTileCol); col++) {
+            for (let row = Math.max(0, topleft_tile_Y); row <= Math.min(bottomright_tile_Y, maxTileRow); row++) {
+                tiles.push({ level, col, row });
             }
         }
-
+        console.debug(`[META] Level ${level}: ${tiles.length} tile visibili`);
         return tiles;
     }
 
+    function drawCachedTiles(level, tiles, downsample) {
+        for (const tile of tiles) {
+            const key = `${tile.level}_${tile.col}_${tile.row}`;
+            const img = tileCache.get(key);
+            if (!img) continue;
+
+            const t_orig_X = tile.col * TILE_SIZE * downsample;
+            const t_orig_Y = tile.row * TILE_SIZE * downsample;
+
+            const t_pos_X = (t_orig_X - offsetX) * currentZoom;
+            const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
+            const t_weight = TILE_SIZE * downsample * currentZoom;
+            const t_height = TILE_SIZE * downsample * currentZoom;
+
+            ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+        }
+    }
 
     // RENDERING
     async function render() {
@@ -186,28 +212,23 @@
         try {
             const level = chooseLevel(currentZoom);
             const downsample = metadata.level_downsamples[level];
-            const tiles = computeVisibleTiles(level, metadata.level_downsamples.length);
+            const tiles = computeVisibleLevelTiles(level);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            drawCachedTiles(level, tiles, downsample);
+
             // Richieste tile parallelizzate
             const tilePromises = tiles.map(async (tile) => {
+                const key = `${tile.level}_${tile.col}_${tile.row}`;
+                if (tileCache.has(key)) return;
                 try {
                     const img = await requestTile(tile.level, tile.col, tile.row);
-                    const t_orig_X = tile.col * TILE_SIZE * downsample;
-                    const t_orig_Y = tile.row * TILE_SIZE * downsample;
-
-                    const t_pos_X = (t_orig_X - offsetX) * currentZoom;
-                    const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
-
-                    const t_weight = TILE_SIZE * downsample * currentZoom;
-                    const t_height = TILE_SIZE * downsample * currentZoom;
-
-                    ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+                    tileCache.set(key, img);
                 } catch (error) {
-                    console.error('[RENDER] Errore nel rendering del tile:', error);
+                    console.error('[RENDER] Errore tile:', error);
                 }
             });
 
@@ -245,7 +266,7 @@
 
     function clampZoom(z) {
         const initialFit = window.__INITIAL_FIT_ZOOM__ || 1.0;
-        const minAllowed = initialFit
+        const minAllowed = initialFit;
         const maxAllowed = MAX_ZOOM;
         return Math.max(minAllowed, Math.min(z, maxAllowed));
     }
