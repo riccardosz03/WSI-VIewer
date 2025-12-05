@@ -146,10 +146,10 @@ def slide_tile(filename):
         return f'Errore nel recupero del tile: {str(e)}', 500
 
     buf = io.BytesIO()
-    tile.save(buf, format='PNG')
+    tile.save(buf, format='JPG', quality=90)
     buf.seek(0)
-    print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
-    return send_file(buf, mimetype='image/png')
+    print(f"[TILE] JPG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
+    return send_file(buf, mimetype='image/jpeg')
     
 
 
