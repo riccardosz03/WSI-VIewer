@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, render_template, redirect, url_for, jsonify
+from flask import Flask, send_file, request, render_template, redirect, url_for, jsonify, abort
 from PIL import Image
 import io, os
 from openslide import open_slide
@@ -15,11 +15,18 @@ SLIDE_CACHE = {}
 DEEPZOOM_CACHE = {}
 TILE_SIZE = 256
 ALLOWED_EXTENSIONS = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrcs', '.tiff', '.svslide', '.bif', '.czi']
+TILE_DIR = 'tmp/tiles/'
+
 
 def slide_path(filename):
     safe = os.path.basename(filename)
     return os.path.join(app.config['UPLOAD_FOLDER'], safe)
 
+def load_tile(level, col, row):
+    path = os.path.join(TILE_DIR, f'level_{level}', f'tile_{col}_{row}.png')
+    if not os.path.exists(path):
+        return None
+    return Image.open(path)
 
 
 # ROUTE HOME PAGE
@@ -151,6 +158,51 @@ def slide_tile(filename):
     print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
     return send_file(buf, mimetype='image/png')
     
+
+@app.route('/slide/<filename>/tiles_batch', methods=['POST'])
+def tiles_batch(filename):
+    body = request.get_json()
+    if not body:
+        abort(400)
+    level = int(body.get('level', 0))
+    tiles = body.get('tiles', [])
+    tile_size = TILE_SIZE
+    out_format = body.get('format', 'PNG').upper()
+
+    if not tiles:
+        abort(400)
+    
+    cols = [t['col'] for t in tiles]
+    rows = [t['row'] for t in tiles]
+    min_col, max_col = min(cols), max(cols)
+    min_row, max_row = min(rows), max(rows)
+
+    cols_count = max_col - min_col + 1
+    rows_count = max_row - min_row + 1
+
+    out_width = cols_count * tile_size
+    out_height = rows_count * tile_size
+    output_image = Image.new('RGB', (out_width, out_height), (255, 255, 255))
+
+    for t in tiles:
+        col = int(t['col'])
+        row = int(t['row'])
+        tile = load_tile(level, col, row)
+        if tile is None:
+            continue
+        dx = (col - min_col) * tile_size
+        dy = (row - min_row) * tile_size
+        output_image.paste(tile.resize((tile_size, tile_size)), (dx, dy))
+    
+    buf = io.BytesIO()
+    if out_format == 'PNG':
+        output_image.save(buf, format='PNG', optimize = True)
+        mime = 'image/png'
+    else:
+        output_image.save(buf, format='JPEG', quality=90, optimize = True)
+        mime = 'image/jpeg'
+    buf.seek(0)
+    return send_file(buf, mimetype=mime)
 
 
 

@@ -90,34 +90,7 @@
         return data;
     }
 
-    // RICHIEDERE UN TILE AL SERVER
-    async function requestTile(level, col, row) {
-        const key = `${level}_${col}_${row}`;
-        
-        if (tileCache.has(key)) {
-            console.debug(`[TILE] Cache hit: L${level} C${col} R${row}`);
-            return tileCache.get(key);
-        }
-
-        console.debug(`[TILE] Richiedo: L${level} C${col} R${row}`);
-        const url = `/slide/${filename}/tile?level=${level}&col=${col}&row=${row}`;
-        
-        const img = new Image();
-        const promise = new Promise((resolve, reject) => {
-            img.onload = () => {
-                console.debug(`[TILE] Caricato: L${level} C${col} R${row}`);
-                resolve(img);
-            };
-            img.onerror = () => {
-                console.error(`[TILE] Errore nel caricamento: L${level} C${col} R${row}`);
-                reject(new Error(`Tile load failed: L${level} C${col} R${row}`));
-            };
-            img.src = url;
-        });
-
-        tileCache.set(key, promise);
-        return promise;
-    }
+    
 
 
 
@@ -186,23 +159,125 @@
         return tiles;
     }
 
-    function drawCachedTiles(level, tiles, downsample) {
-        for (const tile of tiles) {
-            const key = `${tile.level}_${tile.col}_${tile.row}`;
-            const img = tileCache.get(key);
-            if (!img) continue;
+        // Helper: calcola min/max col/row dai tiles (assume tiles tutti dello stesso level)
+    function tilesBounds(tiles) {
+    let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+    for (const t of tiles) {
+        minCol = Math.min(minCol, t.col);
+        maxCol = Math.max(maxCol, t.col);
+        minRow = Math.min(minRow, t.row);
+        maxRow = Math.max(maxRow, t.row);
+    }
+    return { minCol, maxCol, minRow, maxRow };
+    }
 
-            const t_orig_X = tile.col * TILE_SIZE * downsample;
-            const t_orig_Y = tile.row * TILE_SIZE * downsample;
+    // Richiesta batch al server: invia lista tiles, riceve immagine stitched e la disegna
+    async function requestAndDrawBatch(level, tiles, downsample) {
+    if (!tiles || tiles.length === 0) return;
 
-            const t_pos_X = (t_orig_X - offsetX) * currentZoom;
-            const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
-            const t_weight = TILE_SIZE * downsample * currentZoom;
-            const t_height = TILE_SIZE * downsample * currentZoom;
+    // calcola bounding box dei tile richiesti
+    const { minCol, maxCol, minRow, maxRow } = tilesBounds(tiles);
 
-            ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+    // prepara body: invia level e lista compatta (opzionale: invia anche minCol/minRow)
+    const tilesList = [];
+    for (let c = minCol; c <= maxCol; c++) {
+        for (let r = minRow; r <= maxRow; r++) {
+        tilesList.push({ col: c, row: r });
         }
     }
+
+    const body = { level, tiles: tilesList, tile_size: TILE_SIZE };
+
+    // AbortController per poter annullare richieste se necessario (opzionale)
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    try {
+        const resp = await fetch(`/slide/${filename}/tiles_batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal
+        });
+
+        if (!resp.ok) throw new Error(`Batch request failed: ${resp.status}`);
+
+        const blob = await resp.blob();
+        // createImageBitmap è efficiente e non blocca il main thread per il decode
+        const stitchedImg = await createImageBitmap(blob);
+
+        // calcola origine stitched in coordinate immagine (livello 1)
+        const stitchedOriginImgX = minCol * TILE_SIZE * downsample;
+        const stitchedOriginImgY = minRow * TILE_SIZE * downsample;
+
+        // posizione e dimensione in pixel canvas (tenendo conto di offset e zoom)
+        const drawX = (stitchedOriginImgX - offsetX) * currentZoom;
+        const drawY = (stitchedOriginImgY - offsetY) * currentZoom;
+
+        const stitchedW = ((maxCol - minCol + 1) * TILE_SIZE * downsample) * currentZoom;
+        const stitchedH = ((maxRow - minRow + 1) * TILE_SIZE * downsample) * currentZoom;
+
+        // Disegna stitched sul canvas
+        ctx.drawImage(stitchedImg, drawX, drawY, stitchedW, stitchedH);
+
+        // opzionale: popola cache con singoli tile (utile se usi cache per redraw)
+        // suddividi stitchedImg in tile e salva in tileCache come ImageBitmap
+        try {
+        const colsCount = maxCol - minCol + 1;
+        const rowsCount = maxRow - minRow + 1;
+        const tilePixelW = TILE_SIZE * downsample;
+        const tilePixelH = TILE_SIZE * downsample;
+
+        // crea canvas temporaneo per estrarre tile (fallback se vuoi cache)
+        const tmp = new OffscreenCanvas(tilePixelW, tilePixelH);
+        const tctx = tmp.getContext('2d');
+
+        for (let c = 0; c < colsCount; c++) {
+            for (let r = 0; r < rowsCount; r++) {
+            tctx.clearRect(0, 0, tilePixelW, tilePixelH);
+            // disegna la porzione corrispondente dello stitched (in pixel stitched)
+            tctx.drawImage(
+                stitchedImg,
+                c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE, // source in stitched image (tile units)
+                0, 0, tilePixelW, tilePixelH // dest in tmp canvas (scaled to level 1 pixels)
+            );
+            // converti in bitmap e salva in cache con chiave level_col_row
+            const keyCol = minCol + c;
+            const keyRow = minRow + r;
+            try {
+                const bmp = tmp.transferToImageBitmap();
+                const key = `${level}_${keyCol}_${keyRow}`;
+                tileCache.set(key, bmp);
+            } catch (e) {
+                // OffscreenCanvas.transferToImageBitmap può non essere supportato in tutti i browser
+                // in quel caso salta la cache dei singoli tile
+            }
+            }
+        }
+        } catch (e) {
+        // non critico: se la cache fallisce, prosegui comunque
+        console.debug('[BATCH] Cache split non eseguita:', e);
+        }
+
+        return true;
+    } catch (err) {
+        console.warn('[BATCH] Batch request failed, fallback to single-tile:', err);
+        // fallback: scarica singoli tile (come prima)
+        const singlePromises = tiles.map(async (tile) => {
+        const key = `${tile.level}_${tile.col}_${tile.row}`;
+        if (tileCache.has(key)) return;
+        try {
+            const img = await requestTile(tile.level, tile.col, tile.row);
+            tileCache.set(key, img);
+        } catch (error) {
+            console.error('[RENDER] Errore tile fallback:', error);
+        }
+        });
+        await Promise.all(singlePromises);
+        return false;
+    }
+    }
+
 
     // RENDERING
     async function render() {
@@ -218,21 +293,8 @@
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            drawCachedTiles(level, tiles, downsample);
-
-            // Richieste tile parallelizzate
-            const tilePromises = tiles.map(async (tile) => {
-                const key = `${tile.level}_${tile.col}_${tile.row}`;
-                if (tileCache.has(key)) return;
-                try {
-                    const img = await requestTile(tile.level, tile.col, tile.row);
-                    tileCache.set(key, img);
-                } catch (error) {
-                    console.error('[RENDER] Errore tile:', error);
-                }
-            });
-
-            await Promise.all(tilePromises);
+            
+            await requestAndDrawBatch(level, tiles, downsample);
 
             document.getElementById('info-current-level').textContent = level;
             document.getElementById('info-current-level-dims').textContent = `${metadata.level_dimensions[level][0]} × ${metadata.level_dimensions[level][1]}`;
