@@ -7,12 +7,20 @@
     }
     console.log('[INIT] Canvas trovato:', canvas);
     
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { 
+        alpha: false,
+        desynchronized: true,
+        willReadFrequently: false
+    });
     if (!ctx) {
         console.error('[INIT] ERRORE: Impossibile ottenere il contesto 2D del canvas!');
         return;
     }
     console.log('[INIT] Canvas context ottenuto');
+    
+    // Set image smoothing for better performance
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     
     const filename = window.VIEWER_FILENAME;
     if (!filename) {
@@ -33,6 +41,8 @@
     let fullImageH = 0;
     const tileCache = new Map();
     let isRendering = false;
+    let renderRequested = false;
+    let rafId = null;
 
     // MAPPA-THUMBNAIL
     const thumbCanvas = document.getElementById('thumbCanvas');
@@ -221,9 +231,27 @@
     }
 
 
-    // RENDERING
+    // RENDERING with requestAnimationFrame for smooth updates
+    function scheduleRender() {
+        if (renderRequested) return;
+        renderRequested = true;
+        
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+        }
+        
+        rafId = requestAnimationFrame(() => {
+            renderRequested = false;
+            rafId = null;
+            render();
+        });
+    }
+
     async function render() {
-        if (isRendering) return;
+        if (isRendering) {
+            scheduleRender();
+            return;
+        }
         isRendering = true;
 
         try {
@@ -324,7 +352,7 @@
         currentZoom = newZoom;
         constrainOffset();
         console.log(`[ZOOM] zoomBy factor=${factor.toFixed(3)} -> zoom=${currentZoom.toFixed(3)}`);
-        render();
+        scheduleRender();
     }
 
     function zoomIn() {
@@ -342,7 +370,7 @@
         offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
         offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);
         constrainOffset();
-        render();
+        scheduleRender();
     }
 
     // BOTTONI: ZOOMIN, ZOOMOUT, ZOOMRESET
@@ -354,20 +382,40 @@
     if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
     if (homeBtn) homeBtn.addEventListener('click', zoomReset);
 
+    // Wheel zoom with accumulated delta for smooth zooming
+    let wheelAccumulator = 0;
+    let wheelTimeout = null;
+    
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
+        
+        // Accumulate wheel delta for smoother zooming
+        wheelAccumulator += e.deltaY;
+        
+        // Clear previous timeout
+        if (wheelTimeout) {
+            clearTimeout(wheelTimeout);
+        }
+        
+        // Apply zoom immediately for responsiveness
         const factor = Math.exp(-e.deltaY * 0.001);
         zoomBy(factor, mouseX, mouseY);
+        
+        // Reset accumulator after brief delay
+        wheelTimeout = setTimeout(() => {
+            wheelAccumulator = 0;
+        }, 100);
     }, { passive: false });
 
 
 
-    // FUNZIONI PER IL PANNING
+    // FUNZIONI PER IL PANNING with throttling
     let isDragging = false;
     let lastX = 0, lastY = 0;
+    let panScheduled = false;
 
     canvas.addEventListener('pointerdown', (e) => {
         isDragging = true;
@@ -378,6 +426,7 @@
 
     canvas.addEventListener('pointermove', (e) => {
         if (!isDragging) return;
+        
         const deltaX = (e.clientX - lastX) / currentZoom;
         const deltaY = (e.clientY - lastY) / currentZoom;
         offsetX -= deltaX;
@@ -385,7 +434,9 @@
         lastX = e.clientX;
         lastY = e.clientY;
         constrainOffset();
-        render();
+        
+        // Use scheduleRender for smoother panning
+        scheduleRender();
     });
 
     canvas.addEventListener('pointerup', (e) => {
