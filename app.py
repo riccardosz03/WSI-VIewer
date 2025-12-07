@@ -1,9 +1,9 @@
-from flask import Flask, send_file, request, render_template, redirect, url_for, jsonify, abort
+from flask import Flask, send_file, request, render_template, redirect, url_for, jsonify, Response
 from PIL import Image
 import io, os
 from openslide import open_slide
 from openslide.deepzoom import DeepZoomGenerator
-
+import subprocess
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'data/'
@@ -18,6 +18,19 @@ ALLOWED_EXTENSIONS = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '
 TILE_DIR = 'tmp/tiles/'
 
 
+
+def run_pngquant_on_bytes(png_bytes, quality='65-80'):
+    p = subprocess.Popen(
+        ['pngquant', '--quality', quality, '--speed', '1', '--output', '-', '--'],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    out , _ = p.communicate(png_bytes)
+    if p.returncode == 0 and out:
+        return out
+    return png_bytes
+
+
 def slide_path(filename):
     safe = os.path.basename(filename)
     return os.path.join(app.config['UPLOAD_FOLDER'], safe)
@@ -27,6 +40,7 @@ def load_tile(level, col, row):
     if not os.path.exists(path):
         return None
     return Image.open(path)
+
 
 
 # ROUTE HOME PAGE
@@ -143,7 +157,7 @@ def slide_tile(filename):
         print(f"[TILE] ERRORE: coordinate tile non valide: col={col} (max {max_col}), row={row} (max {max_row})")
 
     try:
-        tile = dz.get_tile(level, (col, row)).convert('RGB')
+        tile = dz.get_tile(level, (col, row)).convert('RGBA')
         print(f"[TILE] Tile ottenuto con successo: {filename} L{level} C{col} R{row}")
     except IndexError:
         print(f"[TILE] ERRORE IndexError: file={filename} level={level} col={col} row={row}")
@@ -154,9 +168,15 @@ def slide_tile(filename):
 
     buf = io.BytesIO()
     tile.save(buf, format='PNG')
-    buf.seek(0)
-    print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
-    return send_file(buf, mimetype='image/png')
+    png_bytes = buf.getvalue()
+
+    try:
+        optimized_png = run_pngquant_on_bytes(png_bytes, quality='65-80')
+    except Exception as e:
+        print(f"[TILE] ERRORE durante l'ottimizzazione PNG: {str(e)}")
+        optimized_png = png_bytes
+
+    return  Response(optimized_png, mimetype='image/png', headers={'Cache-Control':'public, max-age=31536000, immutable'})
     
 
 
