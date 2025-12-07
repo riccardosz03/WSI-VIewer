@@ -283,8 +283,8 @@
             //}
 
             // VERSIONE PARALLELIZZATA
-            const tilePromeses = tiles.map(async (tile) => {
-                try{
+            const tilePromises = tiles.map(async (tile) => {
+                try {
                     const img = await requestTile(tile.level, tile.col, tile.row);
                     const t_orig_X = tile.col * TILE_SIZE * downsample;
                     const t_orig_Y = tile.row * TILE_SIZE * downsample;
@@ -293,15 +293,15 @@
                     const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
 
                     const t_weight = TILE_SIZE * downsample * currentZoom;
-                    const t_height = TILE_SIZE * downsample * currentZoom
+                    const t_height = TILE_SIZE * downsample * currentZoom;
 
                     ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
-                } catch(error) {
-                    console.error('[RENDER] Errore nel renderng del tile:', error)
+                } catch (error) {
+                    console.error('[RENDER] Errore nel rendering del tile:', error);
                 }
             });
 
-            await Promise.all(tilePromeses)
+            await Promise.all(tilePromises);
 
             document.getElementById('info-current-level').textContent = level;
             document.getElementById('info-current-level-dims').textContent = `${metadata.level_dimensions[level][0]} × ${metadata.level_dimensions[level][1]}`;
@@ -382,40 +382,23 @@
     if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
     if (homeBtn) homeBtn.addEventListener('click', zoomReset);
 
-    // Wheel zoom with accumulated delta for smooth zooming
-    let wheelAccumulator = 0;
-    let wheelTimeout = null;
-    
+    // Wheel zoom for smooth zooming
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
         
-        // Accumulate wheel delta for smoother zooming
-        wheelAccumulator += e.deltaY;
-        
-        // Clear previous timeout
-        if (wheelTimeout) {
-            clearTimeout(wheelTimeout);
-        }
-        
         // Apply zoom immediately for responsiveness
         const factor = Math.exp(-e.deltaY * 0.001);
         zoomBy(factor, mouseX, mouseY);
-        
-        // Reset accumulator after brief delay
-        wheelTimeout = setTimeout(() => {
-            wheelAccumulator = 0;
-        }, 100);
     }, { passive: false });
 
 
 
-    // FUNZIONI PER IL PANNING with throttling
+    // FUNZIONI PER IL PANNING
     let isDragging = false;
     let lastX = 0, lastY = 0;
-    let panScheduled = false;
 
     canvas.addEventListener('pointerdown', (e) => {
         isDragging = true;
