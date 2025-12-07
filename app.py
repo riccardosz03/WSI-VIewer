@@ -159,52 +159,6 @@ def slide_tile(filename):
     return send_file(buf, mimetype='image/png')
     
 
-@app.route('/slide/<filename>/tiles_batch', methods=['POST'])
-def tiles_batch(filename):
-    body = request.get_json()
-    if not body:
-        abort(400)
-    level = int(body.get('level', 0))
-    tiles = body.get('tiles', [])
-    tile_size = TILE_SIZE
-    out_format = body.get('format', 'PNG').upper()
-
-    if not tiles:
-        abort(400)
-    
-    cols = [t['col'] for t in tiles]
-    rows = [t['row'] for t in tiles]
-    min_col, max_col = min(cols), max(cols)
-    min_row, max_row = min(rows), max(rows)
-
-    cols_count = max_col - min_col + 1
-    rows_count = max_row - min_row + 1
-
-    out_width = cols_count * tile_size
-    out_height = rows_count * tile_size
-    output_image = Image.new('RGB', (out_width, out_height), (255, 255, 255))
-
-    for t in tiles:
-        col = int(t['col'])
-        row = int(t['row'])
-        tile = load_tile(level, col, row)
-        if tile is None:
-            continue
-        dx = (col - min_col) * tile_size
-        dy = (row - min_row) * tile_size
-        output_image.paste(tile.resize((tile_size, tile_size)), (dx, dy))
-    
-    buf = io.BytesIO()
-    if out_format == 'PNG':
-        output_image.save(buf, format='PNG', optimize = True)
-        mime = 'image/png'
-    else:
-        output_image.save(buf, format='JPEG', quality=90, optimize = True)
-        mime = 'image/jpeg'
-    buf.seek(0)
-    return send_file(buf, mimetype=mime)
-
-
 
 # MOSTRA UNA THUMBNAIL DELLA SLIDE, SERVE PER LA MAPPATURA DELLA SLIDE IN TEMPO REALE
 @app.route('/slide/<filename>/thumbnail')
@@ -227,6 +181,7 @@ def slide_thumbnail(filename):
     buf.seek(0)
     print(f"[THUMBNAIL] Generata miniatura per {filename} con dimensioni {width}x{height}")
     return send_file(buf, mimetype='image/png')
+
 
 
 

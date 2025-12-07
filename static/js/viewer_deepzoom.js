@@ -33,6 +33,26 @@
     let fullImageH = 0;
     const tileCache = new Map();
     let isRendering = false;
+    let pendingRequests = 0; // Contatore delle richieste attive
+
+    // Riferimento allo spinner
+    const loadingSpinner = document.getElementById('loadingSpinner');
+
+    // Funzioni per gestire lo spinner
+    function showSpinner() {
+        pendingRequests++;
+        if (loadingSpinner && pendingRequests > 0) {
+            loadingSpinner.style.display = 'inline-flex';
+        }
+    }
+
+    function hideSpinner() {
+        pendingRequests--;
+        if (loadingSpinner && pendingRequests <= 0) {
+            pendingRequests = 0;
+            loadingSpinner.style.display = 'none';
+        }
+    }
 
     // MAPPA-THUMBNAIL con scaling corretto
     const thumbCanvas = document.getElementById('thumbCanvas');
@@ -128,14 +148,18 @@
         console.debug(`[TILE] Richiedo: L${level} C${col} R${row}`);
         const url = `/slide/${filename}/tile?level=${level}&col=${col}&row=${row}`;
         
+        showSpinner(); // Mostra lo spinner
+        
         const img = new Image();
         const promise = new Promise((resolve, reject) => {
             img.onload = () => {
                 console.debug(`[TILE] Caricato: L${level} C${col} R${row}`);
+                hideSpinner(); // Nascondi lo spinner
                 resolve(img);
             };
             img.onerror = () => {
                 console.error(`[TILE] Errore nel caricamento: L${level} C${col} R${row}`);
+                hideSpinner(); // Nascondi lo spinner anche in caso di errore
                 reject(new Error(`Tile load failed: L${level} C${col} R${row}`));
             };
             img.src = url;
@@ -250,6 +274,23 @@
     }
 
 
+    // PRECARICAMENTO PROGRESSIVO DEI LIVELLI SUCCESSIVI
+    function prefetchNextLevel(currentLevel) {
+        // Precarica il livello successivo (zoom out) in background
+        const nextLevel = currentLevel + 1;
+        if (nextLevel >= metadata.level_downsamples.length) return;
+
+        const nextTiles = computeVisibleLevelTiles(nextLevel);
+        console.debug(`[PREFETCH] Precaricamento livello ${nextLevel}: ${nextTiles.length} tile`);
+        
+        // Avvia il caricamento in background senza bloccare
+        nextTiles.forEach(tile => {
+            requestTile(tile.level, tile.col, tile.row).catch(err => {
+                console.debug(`[PREFETCH] Errore prefetch L${tile.level} C${tile.col} R${tile.row}`);
+            });
+        });
+    }
+
     // RENDERING
     async function render() {
         if (isRendering) return;
@@ -264,6 +305,9 @@
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // Avvia SUBITO il precaricamento del livello successivo (non bloccante)
+            prefetchNextLevel(level);
+
             // VERSIONE CICLO FOR, LENTA
             //for (const tile of tiles) {
                 //try {
