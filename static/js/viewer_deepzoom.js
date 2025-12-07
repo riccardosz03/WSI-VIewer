@@ -18,7 +18,7 @@
     }
     console.log('[INIT] Canvas context ottenuto');
     
-    // Set image smoothing for better performance
+    // Set image smoothing for better visual quality
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     
@@ -249,7 +249,7 @@
 
     async function render() {
         if (isRendering) {
-            scheduleRender();
+            // Already rendering, the scheduleRender call will handle re-rendering
             return;
         }
         isRendering = true;

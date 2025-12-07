@@ -204,6 +204,7 @@ body.viewer-page {
   background-color: #000;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
+  image-rendering: pixelated;
   touch-action: none;
   will-change: transform;
 }
