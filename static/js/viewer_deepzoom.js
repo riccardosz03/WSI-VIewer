@@ -1,6 +1,6 @@
 (async function (){
     console.log('[INIT] Script caricato');
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('tileCanvas');
     if (!canvas) {
         console.error('[INIT] ERRORE: Canvas non trovato!');
         return;
@@ -33,13 +33,12 @@
     let fullImageH = 0;
     const tileCache = new Map();
     let isRendering = false;
-    let pendingRequests = 0; // Contatore delle richieste attive
-    let prefetchTimer = null; // Timer per prefetch ritardato
+    let pendingRequests = 0;
+    let prefetchTimer = null; 
 
-    // Riferimento allo spinner
     const loadingSpinner = document.getElementById('loadingSpinner');
 
-    // Funzioni per gestire lo spinner
+    // GESTIONE DELLO SPINNER
     function showSpinner() {
         pendingRequests++;
         if (loadingSpinner && pendingRequests > 0) {
@@ -55,15 +54,16 @@
         }
     }
 
-    // MAPPA-THUMBNAIL con scaling corretto
+
+    // MAPPA-THUMBNAIL
     const thumbCanvas = document.getElementById('thumbCanvas');
     const thumbCtx = thumbCanvas ? thumbCanvas.getContext('2d') : null;
     const thumbImg = new Image();
     let thumbDrawX = 0, thumbDrawY = 0, thumbDrawW = 0, thumbDrawH = 0;
+    const backgroundColor = '#ffffff';
     
     thumbImg.onload = () => {
         if (!thumbCtx || !thumbCanvas) return;
-        // Calcola le proporzioni mantenendo l'aspect ratio
         const aspectRatio = fullImageW / fullImageH;
         const canvasAspectRatio = thumbCanvas.width / thumbCanvas.height;
         
@@ -74,19 +74,23 @@
             thumbDrawX = 0;
             thumbDrawY = (thumbCanvas.height - thumbDrawH) / 2;
         } else {
-            // Immagine più alta: limitata dall'altezza del canvas
             thumbDrawH = thumbCanvas.height;
             thumbDrawW = thumbCanvas.height * aspectRatio;
             thumbDrawX = (thumbCanvas.width - thumbDrawW) / 2;
             thumbDrawY = 0;
         }
         
-        // Riempi il canvas con bianco, poi disegna l'immagine
-        thumbCtx.fillStyle = '#ffffff';
+        const viewerContainer = document.getElementById('viewer-container');
+        if (viewerContainer) {
+            viewerContainer.style.backgroundColor = backgroundColor;
+        }
+        
+        thumbCtx.fillStyle = backgroundColor;
         thumbCtx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
         thumbCtx.drawImage(thumbImg, thumbDrawX, thumbDrawY, thumbDrawW, thumbDrawH);
     };
     thumbImg.src = `/slide/${filename}/thumbnail`;
+
 
     // AGGIORNA LA MAPPA-THUMBNAIL
     function updateMap() {
@@ -107,8 +111,8 @@
             thumbDrawY = 0;
         }
         
-        // Riempi il canvas con bianco prima di disegnare l'immagine
-        thumbCtx.fillStyle = '#ffffff';
+        // Riempi il canvas con il colore di sfondo rilevato prima di disegnare l'immagine
+        thumbCtx.fillStyle = backgroundColor;
         thumbCtx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
         thumbCtx.drawImage(thumbImg, thumbDrawX, thumbDrawY, thumbDrawW, thumbDrawH);
         
@@ -126,7 +130,6 @@
     }
 
 
-
     // RECUPERARE I METADATI
     async function fetchMetadata() {
         console.log('[FETCH] Fetching metadata...');
@@ -136,6 +139,7 @@
         console.log('[FETCH] Received:', data);
         return data;
     }
+
 
     // RICHIEDERE UN TILE AL SERVER
     async function requestTile(level, col, row) {
@@ -171,7 +175,6 @@
     }
 
 
-
     // SCELTA DEL LIVELLO DI ZOOM APPROPRIATO --> min(|level - 1/zoomFactor|)
     function chooseLevel(zoomFactor) {
         if (!metadata) return 0;
@@ -189,7 +192,6 @@
         console.debug(`[ZOOM] Zoom: ${zoomFactor.toFixed(2)} --> Level = ${best}`);
         return best;
     }
-
 
 
     // CALCOLO DEI TILE VISIBILI
@@ -238,7 +240,6 @@
     }
 
 
-
     // PRECARICAMENTO PROGRESSIVO DEI LIVELLI SUCCESSIVI
     function prefetchNextLevel(currentLevel) {
         // Precarica il livello successivo (zoom out) in background
@@ -256,6 +257,7 @@
         });
     }
 
+
     // Schedula il prefetch solo dopo che l'utente ha smesso di interagire
     function schedulePrefetch(level) {
         // Cancella il timer precedente
@@ -269,6 +271,7 @@
             prefetchNextLevel(level);
         }, 500);
     }
+
 
     // ORDINA I TILE PER DISTANZA DAL CENTRO DEL CANVAS
     function sortTilesByDistanceFromCenter(tiles, level) {
@@ -293,60 +296,117 @@
         }).sort((a, b) => a.distance - b.distance);
     }
 
-    // RENDERING
-    async function render() {
+
+    // RENDERING NON-BLOCCANTE
+    function render() {
         if (isRendering) return;
         isRendering = true;
 
-        try {
-            const level = chooseLevel(currentZoom);
-            const downsample = metadata.level_downsamples[level];
-            const tiles = computeVisibleLevelTiles(level);
+        const level = chooseLevel(currentZoom);
+        const downsample = metadata.level_downsamples[level];
+        const tiles = computeVisibleLevelTiles(level);
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Ordina i tile per distanza dal centro
-            const sortedTiles = sortTilesByDistanceFromCenter(tiles, level);
-            console.debug(`[RENDER] Tile ordinati per distanza dal centro`);
-
-            // Carica e disegna i tile in ordine (dal centro verso l'esterno)
-            for (const tile of sortedTiles) {
-                try {
-                    const img = await requestTile(tile.level, tile.col, tile.row);
-                    const t_orig_X = tile.col * TILE_SIZE * downsample;
-                    const t_orig_Y = tile.row * TILE_SIZE * downsample;
-
+        // FASE 1: Disegna IMMEDIATAMENTE la thumbnail del livello più vicino (non bloccante)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Cerca tile già in cache dal livello corrente o livelli vicini come fallback
+        let fallbackDrawn = false;
+        
+        // Prova prima con i livelli più bassi (meno dettaglio) già in cache
+        for (let checkLevel = level + 1; checkLevel < metadata.level_downsamples.length && !fallbackDrawn; checkLevel++) {
+            const checkDownsample = metadata.level_downsamples[checkLevel];
+            const checkTiles = computeVisibleLevelTiles(checkLevel);
+            
+            // Disegna i tile già in cache di questo livello
+            for (const tile of checkTiles) {
+                const key = `${tile.level}_${tile.col}_${tile.row}`;
+                const cached = tileCache.get(key);
+                
+                if (cached && cached instanceof HTMLImageElement) {
+                    const t_orig_X = tile.col * TILE_SIZE * checkDownsample;
+                    const t_orig_Y = tile.row * TILE_SIZE * checkDownsample;
                     const t_pos_X = (t_orig_X - offsetX) * currentZoom;
                     const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
-
-                    const t_weight = TILE_SIZE * downsample * currentZoom;
-                    const t_height = TILE_SIZE * downsample * currentZoom;
-
-                    ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
-                } catch(error) {
-                    console.error('[RENDER] Errore nel rendering del tile:', error);
+                    const t_weight = TILE_SIZE * checkDownsample * currentZoom;
+                    const t_height = TILE_SIZE * checkDownsample * currentZoom;
+                    
+                    ctx.drawImage(cached, t_pos_X, t_pos_Y, t_weight, t_height);
+                    fallbackDrawn = true;
                 }
             }
-
-            // Schedula il prefetch SOLO DOPO che tutti i tile sono stati caricati
-            schedulePrefetch(level);
-
-            document.getElementById('info-current-level').textContent = level;
-            document.getElementById('info-current-level-dims').textContent = `${metadata.level_dimensions[level][0]} × ${metadata.level_dimensions[level][1]}`;
-            document.getElementById('info-current-level-downs').textContent = `${metadata.level_downsamples[level].toFixed(1)}`;
-            document.getElementById('info-visible-tiles').textContent = tiles.length;
-            document.getElementById('info-tile-size').textContent = TILE_SIZE;
-            document.getElementById('info-offset-display').textContent = `${offsetX}, ${offsetY}`;
-
-            console.debug(`[RENDER] Frame completo - zoom=${currentZoom.toFixed(3)}, offset=(${offsetX},${offsetY})`);
-        } catch (err) {
-            console.error('[RENDER] Errore:', err);
-        } finally {
-            isRendering = false;
         }
+        
+        // Se non ci sono tile in cache, usa la thumbnail generale
+        if (!fallbackDrawn && thumbImg.complete && thumbImg.naturalWidth > 0) {
+            const srcX = (offsetX / fullImageW) * thumbImg.width;
+            const srcY = (offsetY / fullImageH) * thumbImg.height;
+            const srcW = ((canvas.width / currentZoom) / fullImageW) * thumbImg.width;
+            const srcH = ((canvas.height / currentZoom) / fullImageH) * thumbImg.height;
+            
+            ctx.drawImage(
+                thumbImg,
+                srcX, srcY, srcW, srcH,
+                0, 0, canvas.width, canvas.height
+            );
+        }
+
+        // FASE 2: Aggiorna subito le info e rilascia il lock
+        document.getElementById('info-current-level').textContent = level;
+        document.getElementById('info-current-level-dims').textContent = `${metadata.level_dimensions[level][0]} × ${metadata.level_dimensions[level][1]}`;
+        document.getElementById('info-current-level-downs').textContent = `${metadata.level_downsamples[level].toFixed(1)}`;
+        document.getElementById('info-visible-tiles').textContent = tiles.length;
+        document.getElementById('info-tile-size').textContent = TILE_SIZE;
+        document.getElementById('info-offset-display').textContent = `${offsetX}, ${offsetY}`;
+        
+        isRendering = false; // Rilascia il lock SUBITO, lo zoom non deve aspettare
         updateMap();
+
+        // FASE 3: Carica e disegna i tile in BACKGROUND (non bloccante)
+        const sortedTiles = sortTilesByDistanceFromCenter(tiles, level);
+        console.debug(`[RENDER] Thumbnail disegnata, caricamento ${sortedTiles.length} tile in background`);
+        
+        // Carica i tile in background senza bloccare
+        loadTilesInBackground(sortedTiles, level, downsample);
+    }
+
+
+    // CARICARE E DISEGNARE I TILE IN BACKGROUND
+    async function loadTilesInBackground(sortedTiles, level, downsample) {
+        let tilesLoaded = 0;
+        
+        for (const tile of sortedTiles) {
+            try {
+                const img = await requestTile(tile.level, tile.col, tile.row);
+                
+                // Verifica che l'utente non abbia già cambiato zoom/pan
+                // Se il livello è cambiato, ignora questo tile
+                const currentLevel = chooseLevel(currentZoom);
+                if (currentLevel !== level) {
+                    console.debug(`[TILE] Livello cambiato da ${level} a ${currentLevel}, tile ignorato`);
+                    break;
+                }
+                
+                const t_orig_X = tile.col * TILE_SIZE * downsample;
+                const t_orig_Y = tile.row * TILE_SIZE * downsample;
+
+                const t_pos_X = (t_orig_X - offsetX) * currentZoom;
+                const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
+
+                const t_weight = TILE_SIZE * downsample * currentZoom;
+                const t_height = TILE_SIZE * downsample * currentZoom;
+
+                // Disegna il tile sopra la thumbnail
+                ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+                tilesLoaded++;
+            } catch(error) {
+                console.error('[TILE] Errore nel caricamento:', error);
+            }
+        }
+
+        console.debug(`[RENDER] Caricati ${tilesLoaded}/${sortedTiles.length} tile per livello ${level}`);
+        
+        // Schedula il prefetch SOLO DOPO che tutti i tile sono stati caricati
+        schedulePrefetch(level);
     }
 
 
@@ -475,33 +535,46 @@
     document.getElementById('info-dims').textContent = metadata.level_dimensions.map(d => `(${d[0]}×${d[1]})`).join(', ');
     document.getElementById('info-downsamples').textContent = metadata.level_downsamples.map(d => d.toFixed(1)).join(', ');
 
+    // Calcola le dimensioni corrette del canvas mantenendo l'aspect ratio
+    const container = document.getElementById('viewer-container');
+    const containerW = container.clientWidth;
+    const containerH = container.clientHeight;
+    const imageAspectRatio = fullImageW / fullImageH;
+    const containerAspectRatio = containerW / containerH;
     
-
-
-    const viewportW = window.innerWidth * 0.9;
-    const viewportH = window.innerHeight * 0.9;
-    const scaleW = viewportW / fullImageW;
-    const scaleH = viewportH / fullImageH;
-    currentZoom = Math.min(scaleW, scaleH, 1.0);
+    let canvasW, canvasH;
+    if (imageAspectRatio > containerAspectRatio) {
+        // Immagine più larga: limita per larghezza
+        canvasW = containerW;
+        canvasH = containerW / imageAspectRatio;
+    } else {
+        // Immagine più alta: limita per altezza
+        canvasH = containerH;
+        canvasW = containerH * imageAspectRatio;
+    }
+    
+    // Imposta le dimensioni del canvas
+    const deviceRatio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(canvasW * deviceRatio);
+    canvas.height = Math.round(canvasH * deviceRatio);
+    canvas.style.width = canvasW + 'px';
+    canvas.style.height = canvasH + 'px';
+    ctx.scale(deviceRatio, deviceRatio);
+    
+    // Calcola lo zoom iniziale per fit-to-view
+    const scaleW = canvasW / fullImageW;
+    const scaleH = canvasH / fullImageH;
+    currentZoom = Math.min(scaleW, scaleH);
     window.__INITIAL_FIT_ZOOM__ = currentZoom;
 
-   
-
-    // NON FONDAMENTALE
-    const deviceRatio = window.devicePixelRatio || 1;
-
-    const canvasW = Math.round(fullImageW * currentZoom);
-    const canvasH = Math.round(fullImageH * currentZoom);
-    canvas.width = canvasW * deviceRatio;
-    canvas.height = canvasH * deviceRatio;
-
-    offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
-    offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);
+    offsetX = Math.max(0, (fullImageW - canvasW / currentZoom) / 2);
+    offsetY = Math.max(0, (fullImageH - canvasH / currentZoom) / 2);
 
     console.log(`[INIT] Canvas: ${canvasW}x${canvasH}, zoom iniziale: ${currentZoom.toFixed(3)}`);
+    console.log(`[INIT] Image: ${fullImageW}x${fullImageH}, aspect ratio: ${imageAspectRatio.toFixed(3)}`);
 
     console.log('[INIT] Primo rendering...');
-    await render();
+    render();
     console.log('[INIT] Script pronto!');
 
 })();

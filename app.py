@@ -3,7 +3,6 @@ from PIL import Image
 import io, os
 from openslide import open_slide
 from openslide.deepzoom import DeepZoomGenerator
-import subprocess
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'data/'
@@ -16,19 +15,6 @@ DEEPZOOM_CACHE = {}
 TILE_SIZE = 256
 ALLOWED_EXTENSIONS = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrcs', '.tiff', '.svslide', '.bif', '.czi']
 TILE_DIR = 'tmp/tiles/'
-
-
-
-def run_pngquant_on_bytes(png_bytes, quality='65-80'):
-    p = subprocess.Popen(
-        ['pngquant', '--quality', quality, '--speed', '1', '--output', '-', '--'],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-    )
-    out , _ = p.communicate(png_bytes)
-    if p.returncode == 0 and out:
-        return out
-    return png_bytes
 
 
 def slide_path(filename):
@@ -167,16 +153,11 @@ def slide_tile(filename):
         return f'Errore nel recupero del tile: {str(e)}', 500
 
     buf = io.BytesIO()
-    tile.save(buf, format='PNG')
-    png_bytes = buf.getvalue()
-
-    try:
-        optimized_png = run_pngquant_on_bytes(png_bytes, quality='65-80')
-    except Exception as e:
-        print(f"[TILE] ERRORE durante l'ottimizzazione PNG: {str(e)}")
-        optimized_png = png_bytes
-
-    return  Response(optimized_png, mimetype='image/png', headers={'Cache-Control':'public, max-age=31536000, immutable'})
+    tile.save(buf, format='PNG', compress_level=6, optimize=False)
+    buf.seek(0)
+    print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
+    
+    return Response(buf.getvalue(), mimetype='image/png', headers={'Cache-Control': 'public, max-age=31536000, immutable'})
     
 
 

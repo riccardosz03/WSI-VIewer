@@ -52,8 +52,10 @@
 
         <!-- Right Panel: Canvas -->
         <div class="right-panel">
-            <div class="viewer-container">
-                <canvas id="canvas"></canvas>
+            <div id="viewer-container">
+                <canvas id="thumbCanvas" width="1024" height="1024"></canvas>
+                <canvas id="tileCanvas" width="1024" height="1024"></canvas>
+                <div id="hud">Zoom: <span id="zoom-val">1.00</span></div>
             </div>
         </div>
     </div>    
