@@ -55,7 +55,6 @@
             <div id="viewer-container">
                 <canvas id="thumbCanvas" width="1024" height="1024"></canvas>
                 <canvas id="tileCanvas" width="1024" height="1024"></canvas>
-                <div id="hud">Zoom: <span id="zoom-val">1.00</span></div>
             </div>
         </div>
     </div>    
@@ -64,7 +63,7 @@
         window.VIEWER_FILENAME = "{{ filename }}";
         console.log('[TEMPLATE] VIEWER_FILENAME definito:', window.VIEWER_FILENAME);
     </script>
-    <script src="/static/js/viewer_deepzoom.js"></script>
+    <script type="module" src="/static/js/viewer.js"></script>
     
   
 </body>

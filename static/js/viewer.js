@@ -2,21 +2,21 @@
     console.log('[INIT] Script caricato');
     const canvas = document.getElementById('tileCanvas');
     if (!canvas) {
-        console.error('[INIT] ERRORE: Canvas non trovato!');
+        console.error('[INIT] ERRORE: Canvas non trovato');
         return;
     }
     console.log('[INIT] Canvas trovato:', canvas);
     
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-        console.error('[INIT] ERRORE: Impossibile ottenere il contesto 2D del canvas!');
+        console.error('[INIT] ERRORE: Impossibile ottenere il contesto 2D del canvas');
         return;
     }
     console.log('[INIT] Canvas context ottenuto');
     
     const filename = window.VIEWER_FILENAME;
     if (!filename) {
-        console.error('[INIT] ERRORE: VIEWER_FILENAME non definito!');
+        console.error('[INIT] ERRORE: VIEWER_FILENAME non definito');
         return;
     }
     console.log('[INIT] Filename:', filename);
@@ -31,6 +31,8 @@
     let offsetY = 0;
     let fullImageW = 0;
     let fullImageH = 0;
+    let canvasW = 0;  // Dimensioni logiche del canvas
+    let canvasH = 0;  // Dimensioni logiche del canvas
     const tileCache = new Map();
     let isRendering = false;
     let pendingRequests = 0;
@@ -66,14 +68,18 @@
         if (!thumbCtx || !thumbCanvas) return;
         const aspectRatio = fullImageW / fullImageH;
         const canvasAspectRatio = thumbCanvas.width / thumbCanvas.height;
+        console.log(`[MAP] fullImageW=${fullImageW}, fullImageH=${fullImageH}, aspectRatio=${aspectRatio.toFixed(3)}`);
+        console.log(`[MAP] canvasAspectRatio=${canvasAspectRatio.toFixed(3)}`);
+        
         
         if (aspectRatio > canvasAspectRatio) {
-            // Immagine più larga: limitata dalla larghezza del canvas
+            // Immagine più larga del canvas
             thumbDrawW = thumbCanvas.width;
             thumbDrawH = thumbCanvas.width / aspectRatio;
             thumbDrawX = 0;
             thumbDrawY = (thumbCanvas.height - thumbDrawH) / 2;
         } else {
+            // Immagine più alta del canvas
             thumbDrawH = thumbCanvas.height;
             thumbDrawW = thumbCanvas.height * aspectRatio;
             thumbDrawX = (thumbCanvas.width - thumbDrawW) / 2;
@@ -121,8 +127,8 @@
         const scaleY = thumbDrawH / fullImageH;
         const rectX = thumbDrawX + offsetX * scaleX;
         const rectY = thumbDrawY + offsetY * scaleY;
-        const rectW = (canvas.width / currentZoom) * scaleX;
-        const rectH = (canvas.height / currentZoom) * scaleY;
+        const rectW = (canvasW / currentZoom) * scaleX;
+        const rectH = (canvasH / currentZoom) * scaleY;
         
         thumbCtx.strokeStyle = 'red';
         thumbCtx.lineWidth = 2;
@@ -153,18 +159,21 @@
         console.debug(`[TILE] Richiedo: L${level} C${col} R${row}`);
         const url = `/slide/${filename}/tile?level=${level}&col=${col}&row=${row}`;
         
-        showSpinner(); // Mostra lo spinner
+        // mostro lo spinner durante il caricamento del tile
+        showSpinner();
         
         const img = new Image();
         const promise = new Promise((resolve, reject) => {
             img.onload = () => {
                 console.debug(`[TILE] Caricato: L${level} C${col} R${row}`);
-                hideSpinner(); // Nascondi lo spinner
+                // nascondo lo spinner quando il tile è stato caricato
+                hideSpinner();
                 resolve(img);
             };
             img.onerror = () => {
-                console.error(`[TILE] Errore nel caricamento: L${level} C${col} R${row}`);
-                hideSpinner(); // Nascondi lo spinner anche in caso di errore
+                console.error(`[TILE] Errore nel caricamento del tile: L${level} C${col} R${row}`);
+                // nascondo lo spinner in caso di errore
+                hideSpinner();
                 reject(new Error(`Tile load failed: L${level} C${col} R${row}`));
             };
             img.src = url;
@@ -189,7 +198,7 @@
                 best = i;
             }
         }
-        console.debug(`[ZOOM] Zoom: ${zoomFactor.toFixed(2)} --> Level = ${best}`);
+        console.debug(`[ZOOM] Zoom: ${zoomFactor.toFixed(2)} --> Livello della slide = ${best}`);
         return best;
     }
 
@@ -205,9 +214,9 @@
         // COORDINATE IN LIVELLO BASE
         const lev_1_topleft_X = offsetX;
         const lev_1_topleft_Y = offsetY;
-        const lev_1_bottomright_X = offsetX + canvas.width / currentZoom;
-        const lev_1_bottomright_Y = offsetY + canvas.height / currentZoom;
-        console.log(`[META] Canvas width=${canvas.width} ; height=${canvas.height}`)
+        const lev_1_bottomright_X = offsetX + canvasW / currentZoom;
+        const lev_1_bottomright_Y = offsetY + canvasH / currentZoom;
+        console.log(`[META] Canvas logical width=${canvasW} ; height=${canvasH}`)
 
         // COORDINATE IN LIVELLO CORRENTE
         const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
@@ -242,30 +251,27 @@
 
     // PRECARICAMENTO PROGRESSIVO DEI LIVELLI SUCCESSIVI
     function prefetchNextLevel(currentLevel) {
-        // Precarica il livello successivo (zoom out) in background
         const nextLevel = currentLevel + 1;
         if (nextLevel >= metadata.level_downsamples.length) return;
 
         const nextTiles = computeVisibleLevelTiles(nextLevel);
         console.debug(`[PREFETCH] Precaricamento livello ${nextLevel}: ${nextTiles.length} tile`);
         
-        // Avvia il caricamento in background senza bloccare
         nextTiles.forEach(tile => {
             requestTile(tile.level, tile.col, tile.row).catch(err => {
-                console.debug(`[PREFETCH] Errore prefetch L${tile.level} C${tile.col} R${tile.row}`);
+                console.debug(`[PREFETCH] Errore nel prefetch del tile L${tile.level} C${tile.col} R${tile.row}`);
             });
         });
     }
 
 
-    // Schedula il prefetch solo dopo che l'utente ha smesso di interagire
+    // PER EVITARE PREFETCH MULTIPLI DURANTE LO SCROLL/ZOOM, SCHEDULA IL PREFETCH DOPO 500ms DI INATTIVITÀ
     function schedulePrefetch(level) {
         // Cancella il timer precedente
         if (prefetchTimer) {
             clearTimeout(prefetchTimer);
         }
         
-        // Avvia un nuovo timer: prefetch dopo 500ms di inattività
         prefetchTimer = setTimeout(() => {
             console.debug(`[PREFETCH] Utente inattivo, avvio prefetch per livello ${level}`);
             prefetchNextLevel(level);
@@ -277,15 +283,12 @@
     function sortTilesByDistanceFromCenter(tiles, level) {
         const downsample = metadata.level_downsamples[level];
         
-        // Calcola il centro del viewport in coordinate immagine
-        const centerImgX = offsetX + (canvas.width / currentZoom) / 2;
-        const centerImgY = offsetY + (canvas.height / currentZoom) / 2;
+        const centerImgX = offsetX + (canvasW / currentZoom) / 2;
+        const centerImgY = offsetY + (canvasH / currentZoom) / 2;
         
-        // Calcola il centro in coordinate tile
         const centerTileX = centerImgX / (TILE_SIZE * downsample);
         const centerTileY = centerImgY / (TILE_SIZE * downsample);
         
-        // Aggiungi distanza a ogni tile e ordina
         return tiles.map(tile => {
             const tileCenterX = tile.col + 0.5;
             const tileCenterY = tile.row + 0.5;
@@ -307,7 +310,7 @@
         const tiles = computeVisibleLevelTiles(level);
 
         // FASE 1: Disegna IMMEDIATAMENTE la thumbnail del livello più vicino (non bloccante)
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvasW, canvasH);
         
         // Cerca tile già in cache dal livello corrente o livelli vicini come fallback
         let fallbackDrawn = false;
@@ -340,13 +343,13 @@
         if (!fallbackDrawn && thumbImg.complete && thumbImg.naturalWidth > 0) {
             const srcX = (offsetX / fullImageW) * thumbImg.width;
             const srcY = (offsetY / fullImageH) * thumbImg.height;
-            const srcW = ((canvas.width / currentZoom) / fullImageW) * thumbImg.width;
-            const srcH = ((canvas.height / currentZoom) / fullImageH) * thumbImg.height;
+            const srcW = ((canvasW / currentZoom) / fullImageW) * thumbImg.width;
+            const srcH = ((canvasH / currentZoom) / fullImageH) * thumbImg.height;
             
             ctx.drawImage(
                 thumbImg,
                 srcX, srcY, srcW, srcH,
-                0, 0, canvas.width, canvas.height
+                0, 0, canvasW, canvasH
             );
         }
 
@@ -362,8 +365,19 @@
         updateMap();
 
         // FASE 3: Carica e disegna i tile in BACKGROUND (non bloccante)
-        const sortedTiles = sortTilesByDistanceFromCenter(tiles, level);
-        console.debug(`[RENDER] Thumbnail disegnata, caricamento ${sortedTiles.length} tile in background`);
+        // Durante lo zoom iniziale (fit-to-view), usa ordine naturale per evitare sovrapposizioni
+        let sortedTiles;
+        const isInitialZoom = Math.abs(currentZoom - window.__INITIAL_FIT_ZOOM__) < 0.0001;
+        
+        if (isInitialZoom) {
+            // Zoom iniziale: ordine naturale (left-to-right, top-to-bottom)
+            sortedTiles = tiles;
+            console.debug(`[RENDER] Zoom iniziale, uso ordine naturale per ${tiles.length} tile`);
+        } else {
+            // Zoom/pan dell'utente: ordina dal centro
+            sortedTiles = sortTilesByDistanceFromCenter(tiles, level);
+            console.debug(`[RENDER] Zoom utente, ordino ${tiles.length} tile dal centro`);
+        }
         
         // Carica i tile in background senza bloccare
         loadTilesInBackground(sortedTiles, level, downsample);
@@ -374,29 +388,56 @@
     async function loadTilesInBackground(sortedTiles, level, downsample) {
         let tilesLoaded = 0;
         
+        // Cattura i valori correnti di offset e zoom per questo rendering
+        const renderOffsetX = offsetX;
+        const renderOffsetY = offsetY;
+        const renderZoom = currentZoom;
+        
         for (const tile of sortedTiles) {
             try {
                 const img = await requestTile(tile.level, tile.col, tile.row);
                 
-                // Verifica che l'utente non abbia già cambiato zoom/pan
-                // Se il livello è cambiato, ignora questo tile
+                // Verifica che l'utente non abbia già cambiato zoom/pan significativamente
                 const currentLevel = chooseLevel(currentZoom);
                 if (currentLevel !== level) {
                     console.debug(`[TILE] Livello cambiato da ${level} a ${currentLevel}, tile ignorato`);
                     break;
                 }
                 
+                // Controlla se offset o zoom sono cambiati significativamente
+                const offsetDeltaX = Math.abs(offsetX - renderOffsetX);
+                const offsetDeltaY = Math.abs(offsetY - renderOffsetY);
+                const zoomDelta = Math.abs(currentZoom - renderZoom);
+                
+                if (offsetDeltaX > 100 || offsetDeltaY > 100 || zoomDelta > 0.1) {
+                    console.debug(`[TILE] Vista cambiata significativamente, tile ignorato`);
+                    break;
+                }
+                
                 const t_orig_X = tile.col * TILE_SIZE * downsample;
                 const t_orig_Y = tile.row * TILE_SIZE * downsample;
 
-                const t_pos_X = (t_orig_X - offsetX) * currentZoom;
-                const t_pos_Y = (t_orig_Y - offsetY) * currentZoom;
+                // Usa le coordinate catturate all'inizio del rendering
+                const t_pos_X = (t_orig_X - renderOffsetX) * renderZoom;
+                const t_pos_Y = (t_orig_Y - renderOffsetY) * renderZoom;
 
-                const t_weight = TILE_SIZE * downsample * currentZoom;
-                const t_height = TILE_SIZE * downsample * currentZoom;
+                // Usa le dimensioni EFFETTIVE del tile (non assumere 256x256)
+                // Alcuni tile sui bordi possono essere più piccoli
+                const actualTileW = img.width;
+                const actualTileH = img.height;
+                const t_weight = actualTileW * downsample * renderZoom;
+                const t_height = actualTileH * downsample * renderZoom;
+
+                // DEBUG: Log coordinate e dimensioni tile
+                console.log(`[TILE] Disegno L${level} C${tile.col}R${tile.row}:`);
+                console.log(`  Tile img: ${img.width}x${img.height}`);
+                console.log(`  Canvas pos: (${t_pos_X.toFixed(1)}, ${t_pos_Y.toFixed(1)})`);
+                console.log(`  Canvas size: ${t_weight.toFixed(1)}x${t_height.toFixed(1)}`);
 
                 // Disegna il tile sopra la thumbnail
                 ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
+                
+                
                 tilesLoaded++;
             } catch(error) {
                 console.error('[TILE] Errore nel caricamento:', error);
@@ -411,8 +452,8 @@
 
 
     function constrainOffset() {
-        const maxOffsetX = Math.max(0, fullImageW - canvas.width / currentZoom);
-        const maxOffsetY = Math.max(0, fullImageH - canvas.height / currentZoom);
+        const maxOffsetX = Math.max(0, fullImageW - canvasW / currentZoom);
+        const maxOffsetY = Math.max(0, fullImageH - canvasH / currentZoom);
 
         offsetX = Math.max(0, Math.min(offsetX, maxOffsetX));
         offsetY = Math.max(0, Math.min(offsetY, maxOffsetY));
@@ -430,7 +471,7 @@
         return Math.max(minAllowed, Math.min(z, maxAllowed));
     }
 
-    function zoomBy(factor, centerX = canvas.width/2, centerY = canvas.height/2) {
+    function zoomBy(factor, centerX = canvasW/2, centerY = canvasH/2) {
         const orig_imgX = offsetX + centerX / currentZoom;
         const orig_imgY = offsetY + centerY / currentZoom;
 
@@ -457,8 +498,8 @@
         console.log('[ZOOM] Reset');
         const initial = window.__INITIAL_FIT_ZOOM__ || 1.0;
         currentZoom = initial;
-        offsetX = Math.max(0, (fullImageW - canvas.width / currentZoom) / 2);
-        offsetY = Math.max(0, (fullImageH - canvas.height / currentZoom) / 2);
+        offsetX = Math.max(0, (fullImageW - canvasW / currentZoom) / 2);
+        offsetY = Math.max(0, (fullImageH - canvasH / currentZoom) / 2);
         constrainOffset();
         render();
     }
@@ -524,7 +565,6 @@
         return;
     }
 
-    
 
     if (metadata && metadata.properties) {
         const vendor = metadata.properties["openslide.vendor"] || "N.D";
@@ -542,7 +582,6 @@
     const imageAspectRatio = fullImageW / fullImageH;
     const containerAspectRatio = containerW / containerH;
     
-    let canvasW, canvasH;
     if (imageAspectRatio > containerAspectRatio) {
         // Immagine più larga: limita per larghezza
         canvasW = containerW;
@@ -570,8 +609,10 @@
     offsetX = Math.max(0, (fullImageW - canvasW / currentZoom) / 2);
     offsetY = Math.max(0, (fullImageH - canvasH / currentZoom) / 2);
 
-    console.log(`[INIT] Canvas: ${canvasW}x${canvasH}, zoom iniziale: ${currentZoom.toFixed(3)}`);
+    console.log(`[INIT] Canvas: ${canvasW}x${canvasH}, zoom iniziale: ${currentZoom.toFixed(6)}`);
     console.log(`[INIT] Image: ${fullImageW}x${fullImageH}, aspect ratio: ${imageAspectRatio.toFixed(3)}`);
+    console.log(`[INIT] Offset iniziale: offsetX=${offsetX}, offsetY=${offsetY}`);
+    console.log(`[INIT] Viewport size in image coords: ${canvasW / currentZoom} x ${canvasH / currentZoom}`);
 
     console.log('[INIT] Primo rendering...');
     render();
