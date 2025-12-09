@@ -14,18 +14,11 @@ SLIDE_CACHE = {}
 DEEPZOOM_CACHE = {}
 TILE_SIZE = 256
 ALLOWED_EXTENSIONS = ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrcs', '.tiff', '.svslide', '.bif', '.czi']
-TILE_DIR = 'tmp/tiles/'
 
 
 def slide_path(filename):
     safe = os.path.basename(filename)
     return os.path.join(app.config['UPLOAD_FOLDER'], safe)
-
-def load_tile(level, col, row):
-    path = os.path.join(TILE_DIR, f'level_{level}', f'tile_{col}_{row}.png')
-    if not os.path.exists(path):
-        return None
-    return Image.open(path)
 
 
 
@@ -89,6 +82,10 @@ def slide_info(filename):
     except Exception:
         level_downsamples = list(getattr(slide, 'level_downsamples', []))
 
+    # Inverti le liste
+    level_dimensions = list(reversed(level_dimensions))
+    level_downsamples = list(reversed(level_downsamples))
+
     # LOGS
     print(f"[INFO] Slide dimensions: {slide.dimensions}")
     print(f"[INFO] Number of levels: {dz.level_count}")
@@ -135,7 +132,11 @@ def slide_tile(filename):
         print(f"[TILE] ERRORE: livello non valido: {level} (range 0..{dz.level_count-1})")
         return 'Level non valido', 400
 
-    w, h = dz.level_dimensions[level]
+    # Inverti l'indice del livello per DeepZoom
+    dz_level = dz.level_count - 1 - level
+    print(f"[TILE] Livello invertito: frontend level={level} -> deepzoom level={dz_level}")
+
+    w, h = dz.level_dimensions[dz_level]
     max_col = (w + TILE_SIZE - 1) // TILE_SIZE
     max_row = (h + TILE_SIZE - 1) // TILE_SIZE
     print(f"[TILE] Livello {level} dimensioni: {w}x{h}, tile_size={TILE_SIZE}, max_col={max_col}, max_row={max_row}")
@@ -143,7 +144,7 @@ def slide_tile(filename):
         print(f"[TILE] ERRORE: coordinate tile non valide: col={col} (max {max_col}), row={row} (max {max_row})")
 
     try:
-        tile = dz.get_tile(level, (col, row)).convert('RGBA')
+        tile = dz.get_tile(dz_level, (col, row)).convert('RGBA')
         print(f"[TILE] Tile ottenuto con successo: {filename} L{level} C{col} R{row}")
     except IndexError:
         print(f"[TILE] ERRORE IndexError: file={filename} level={level} col={col} row={row}")
