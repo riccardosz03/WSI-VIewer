@@ -249,8 +249,8 @@
 
     // PRECARICAMENTO PROGRESSIVO DEI LIVELLI SUCCESSIVI
     function prefetchNextLevel(currentLevel) {
-        const nextLevel = currentLevel - 1;
-        if (nextLevel < 0) return;
+        const nextLevel = currentLevel + 1;
+        if (nextLevel >= metadata.level_downsamples.length) return;
 
         const nextTiles = computeVisibleLevelTiles(nextLevel);
         console.debug(`[PREFETCH] Precaricamento livello ${nextLevel}: ${nextTiles.length} tile`);
@@ -281,6 +281,7 @@
     // ORDINA I TILE PER DISTANZA DAL CENTRO DEL CANVAS
     function sortTilesByDistanceFromCenter(tiles, level) {
         const downsample = metadata.level_downsamples[level];
+
         // coordinate del centro del canvas in unità di immagine
         const centerImgX = offsetX + (canvasW / currentZoom) / 2;
         const centerImgY = offsetY + (canvasH / currentZoom) / 2;
@@ -346,11 +347,7 @@
             const srcW = ((canvasW / currentZoom) / fullImageW) * thumbImg.width;
             const srcH = ((canvasH / currentZoom) / fullImageH) * thumbImg.height;
             
-            ctx.drawImage(
-                thumbImg,
-                srcX, srcY, srcW, srcH,
-                0, 0, canvasW, canvasH
-            );
+            ctx.drawImage(thumbImg, srcX, srcY, srcW, srcH, 0, 0, canvasW, canvasH);
         }
 
 
@@ -396,7 +393,7 @@
                 
                 const currentLevel = chooseLevel(currentZoom);
                 if (currentLevel !== level) {
-                    console.debug(`[BACKGOUND] Livello cambiato da ${level} a ${currentLevel}, tile ignorato`);
+                    console.debug(`[BACKGROUND] Livello cambiato da ${level} a ${currentLevel}, tile ignorato`);
                     break;
                 }
                 
