@@ -5,63 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WSI Viewer - {{ filename }}</title>
     <link rel="stylesheet" href="/static/css/style_viewer.css">
+    <!-- OpenSeadragon CSS -->
+    <style>
+        #openseadragon-viewer {
+            width: 100%;
+            height: 100vh;
+            background-color: #000;
+        }
+    </style>
 </head>
-<body class="viewer-page">
-    <div class="viewer-layout">
-        <!-- Left Panel: Toolbar + Thumbnail-->
-        <div class="left-panel">
-            <h2 class="viewer-title">{{ filename }}</h2>
-            <div class="toolbar">
-                <button id="zoomInBtn" class="toolbar-btn">🔍+</button>
-                <button id="zoomOutBtn" class="toolbar-btn">🔍−</button>
-                <button id="homeBtn" class="toolbar-btn">⌂</button>
-                <button onclick="window.location.href='/'" class="toolbar-btn">⬅</button>
-            </div>
-
-           <div class="info-panel">
-                <h3>Dettagli immagine</h3>
-                <table class="info-table-horizontal">
-                    <tbody>
-                    <tr><th>Produttore</th><td id="info-producer">–</td></tr>
-                    <tr><th>Dimensione originale</th><td id="info-size">–</td></tr>
-                    <tr><th>Livelli</th><td id="info-levels">–</td></tr>
-                    <tr><th>Dimensioni dei livelli</th><td id="info-dims">–</td></tr>
-                    <tr><th>Downsamples</th><td id="info-downsamples">–</td></tr>
-                    <tr><th class="highlight">Livello corrente</th><td id="info-current-level">–</td></tr>
-                    <tr><th class="highlight">Dimensioni livello corrente</th><td id="info-current-level-dims">–</td></tr>
-                    <tr><th class="highlight">Downsample livello corrente</th><td id="info-current-level-downs">–</td></tr>
-                    <tr><th>Tile visibili</th><td id="info-visible-tiles">–</td></tr>
-                    <tr><th>Tile size</th><td id="info-tile-size">–</td></tr>
-                    <tr><th>Offset display</th><td id="info-offset-display">–</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="info-panel">
-                <h3>Anteprima Slide</h3>
-                <div class="thumbnail-wrapper">
-                    <canvas id="thumbCanvas" width="500" height="500" aria-label="miniatura della slide"></canvas>
-                </div>
-            </div>
-        </div>
-
-
-
-        <!-- Right Panel: Canvas -->
-        <div class="right-panel">
-            <div class="viewer-container">
-                <canvas id="canvas"></canvas>
-            </div>
-        </div>
-    </div>    
+<body>
+    <div id="openseadragon-viewer"></div>
+    
+    <!-- OpenSeadragon Library da CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
     
     <script>
-        window.VIEWER_FILENAME = "{{ filename }}";
-        console.log('[TEMPLATE] VIEWER_FILENAME definito:', window.VIEWER_FILENAME);
+        // Inizializza OpenSeadragon
+        var viewer = OpenSeadragon({
+            id: "openseadragon-viewer",
+            prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+            
+            // Sorgente dell'immagine (file .dzi)
+            tileSources: "/slide/{{ filename }}.dzi",
+            
+            // Opzioni di visualizzazione
+            showNavigator: true,           // Mostra la mini-mappa
+            navigatorPosition: "TOP_RIGHT", // Posizione della mini-mappa
+            showNavigationControl: true,    // Mostra i controlli di navigazione
+            navigationControlAnchor: OpenSeadragon.ControlAnchor.TOP_LEFT,
+            
+            // Opzioni di zoom
+            minZoomLevel: 0.5,
+            maxZoomLevel: 10,
+            zoomPerClick: 2,
+            zoomPerScroll: 1.2,
+            
+            // Opzioni di performance
+            animationTime: 0.5,
+            immediateRender: false,
+            
+            // Gesture
+            gestureSettingsMouse: {
+                clickToZoom: false,
+                dblClickToZoom: true
+            },
+            
+            // Home button ritorna alla vista iniziale
+            homeButton: "home-button",
+            zoomInButton: "zoom-in",
+            zoomOutButton: "zoom-out",
+            fullPageButton: "full-page"
+        });
+        
+        // Event listeners (opzionale per debugging)
+        viewer.addHandler('open', function() {
+            console.log('Slide caricata con successo: {{ filename }}');
+        });
+        
+        viewer.addHandler('tile-loaded', function() {
+            console.log('Tile caricato');
+        });
+        
+        viewer.addHandler('open-failed', function(event) {
+            console.error('Errore nel caricamento della slide:', event);
+            alert('Errore nel caricamento della slide. Controlla la console per dettagli.');
+        });
     </script>
-    <script src="/static/js/viewer_deepzoom.js"></script>
-    
-  
 </body>
 </html>
-
