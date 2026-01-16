@@ -60,7 +60,6 @@ def get_deepzoom(filename):
         slide = get_slide(filename)
         dz = DeepZoomGenerator(slide, tile_size=TILE_SIZE, overlap=0, limit_bounds=False)
         DEEPZOOM_CACHE[filename] = dz
-        print(f"[DEEPZOOM] Creato oggetto DeepZoomGenerator per {filename} con tile_size={TILE_SIZE}")
     return DEEPZOOM_CACHE[filename]
 
 
@@ -111,7 +110,6 @@ def slide_tile(filename):
     row_arg = request.args.get('row')
 
     if col_arg is None or row_arg is None:
-        print(f"[TILE] ERRORE: Parametri col/row mancanti per file={filename}, defaulting to 0,0")
         col = 0
         row = 0
     else:
@@ -121,34 +119,25 @@ def slide_tile(filename):
         except ValueError:
             return 'Parametri col/row non validi', 400
 
-    print(f"[TILE] Richiesta tile: file={filename} level={level} col={col} row={row}")
-
     dz = get_deepzoom(filename)
     if level < 0 or level >= dz.level_count:
-        print(f"[TILE] ERRORE: livello non valido: {level} (range 0..{dz.level_count-1})")
         return 'Level non valido', 400
 
     w, h = dz.level_dimensions[level]
     max_col = (w + TILE_SIZE - 1) // TILE_SIZE
     max_row = (h + TILE_SIZE - 1) // TILE_SIZE
-    print(f"[TILE] Livello {level} dimensioni: {w}x{h}, tile_size={TILE_SIZE}, max_col={max_col}, max_row={max_row}")
     if col < 0 or col >= max_col or row < 0 or row >= max_row:
-        print(f"[TILE] ERRORE: coordinate tile non valide: col={col} (max {max_col}), row={row} (max {max_row})")
-
+        return 'Col/Row non validi', 400
     try:
         tile = dz.get_tile(level, (col, row)).convert('RGBA')
-        print(f"[TILE] Tile ottenuto con successo: {filename} L{level} C{col} R{row}")
     except IndexError:
-        print(f"[TILE] ERRORE IndexError: file={filename} level={level} col={col} row={row}")
         return 'Tile non disponibile', 404
     except Exception as e:
-        print(f"[TILE] ERRORE Exception: file={filename} level={level} col={col} row={row} - {str(e)}")
         return f'Errore nel recupero del tile: {str(e)}', 500
 
     buf = io.BytesIO()
     tile.save(buf, format='PNG', compress_level=6, optimize=False)
     buf.seek(0)
-    print(f"[TILE] PNG salvato su buffer, dimensioni: {buf.getbuffer().nbytes} bytes")
     
     return Response(buf.getvalue(), mimetype='image/png', headers={'Cache-Control': 'public, max-age=31536000, immutable'})
     
@@ -168,12 +157,12 @@ def slide_thumbnail(filename):
     buf = io.BytesIO()
     thumb.save(buf, format='PNG', compress_level=9)
     
+    #TODO, eliminare questa parte di codice una volta testato
     try:
         thumb.save(f'tmp/thumbnails/thumbnail_{filename}_{width}x{height}.png', format='PNG', compress_level=9)
     except:
         pass  
     buf.seek(0)
-    print(f"[THUMBNAIL] Generata miniatura per {filename} con dimensioni {width}x{height}")
     return send_file(buf, mimetype='image/png')
 
 
