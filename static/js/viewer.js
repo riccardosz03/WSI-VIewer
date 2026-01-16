@@ -1,25 +1,18 @@
 (async function (){
-    console.log('[INIT] Script caricato');
     const canvas = document.getElementById('tileCanvas');
     if (!canvas) {
-        console.error('[INIT] ERRORE: Canvas non trovato');
         return;
     }
-    console.log('[INIT] Canvas trovato:', canvas);
     
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-        console.error('[INIT] ERRORE: Impossibile ottenere il contesto 2D del canvas');
         return;
     }
-    console.log('[INIT] Canvas context ottenuto');
     
     const filename = window.VIEWER_FILENAME;
     if (!filename) {
-        console.error('[INIT] ERRORE: VIEWER_FILENAME non definito');
         return;
     }
-    console.log('[INIT] Filename:', filename);
 
     // COSTANTI
     const DEFAULT_TILE_SIZE = 256;
@@ -36,7 +29,7 @@
     const tileCache = new Map();
     let isRendering_FLAG = false;
     let pendingRequests = 0;
-    let timerPrefatch = null; 
+    let timerPrefetch = null; 
 
     const loadingSpinner = document.getElementById('loadingSpinner');
 
@@ -68,8 +61,6 @@
         if (!thumbCtx || !thumbCanvas) return;
         const aspectRatio = fullImageW / fullImageH;
         const canvasAspectRatio = thumbCanvas.width / thumbCanvas.height;
-        console.log(`[MAP] fullImageW=${fullImageW}, fullImageH=${fullImageH}, aspectRatio=${aspectRatio.toFixed(3)}`);
-        console.log(`[MAP] canvasAspectRatio=${canvasAspectRatio.toFixed(3)}`);
         
         
         if (aspectRatio > canvasAspectRatio) {
@@ -136,11 +127,9 @@
 
     // RECUPERARE I METADATI
     async function fetchMetadata() {
-        console.log('[FETCH] Fetching metadata...');
         const resp = await fetch(`/slide/${filename}/info`);
         if (!resp.ok) throw new Error(`Metadata fetch failed: ${resp.status}`);
         const data = await resp.json();
-        console.log('[FETCH] Received:', data);
         return data;
     }
 
@@ -150,11 +139,9 @@
         const key = `${level}_${col}_${row}`;
         
         if (tileCache.has(key)) {
-            console.debug(`[TILE] Cache hit: L${level} C${col} R${row}`);
             return tileCache.get(key);
         }
 
-        console.debug(`[TILE] Richiedo: L${level} C${col} R${row}`);
         const url = `/slide/${filename}/tile?level=${level}&col=${col}&row=${row}`;
         
         // mostro lo spinner durante il caricamento del tile
@@ -163,13 +150,11 @@
         const img = new Image();
         const promise = new Promise((resolve, reject) => {
             img.onload = () => {
-                console.debug(`[TILE] Caricato: L${level} C${col} R${row}`);
                 // nascondo lo spinner quando il tile è stato caricato
                 hideSpinner();
                 resolve(img);
             };
             img.onerror = () => {
-                console.error(`[TILE] Errore nel caricamento del tile: L${level} C${col} R${row}`);
                 // nascondo lo spinner in caso di errore
                 hideSpinner();
                 reject(new Error(`Tile load failed: L${level} C${col} R${row}`));
@@ -196,7 +181,6 @@
                 best = i;
             }
         }
-        console.debug(`[ZOOM] Zoom: ${zoomFactor.toFixed(2)} --> Livello della slide = ${best}`);
         return best;
     }
 
@@ -206,35 +190,26 @@
         const downsample = metadata.level_downsamples[level];
         const levelDims = metadata.level_dimensions[level];
         const [levelW, levelH] = levelDims;
-        console.log("[META] Level:", level);
-        console.log("[META] Level dims:", metadata.level_dimensions[level]);
 
         // COORDINATE IN LIVELLO BASE
         const lev_1_topleft_X = offsetX;
         const lev_1_topleft_Y = offsetY;
         const lev_1_bottomright_X = offsetX + canvasW / currentZoom;
         const lev_1_bottomright_Y = offsetY + canvasH / currentZoom;
-        console.log(`[META] Canvas logical width=${canvasW} ; height=${canvasH}`)
 
         // COORDINATE IN LIVELLO CORRENTE
         const cur_lev_topleft_X = Math.floor(lev_1_topleft_X / downsample);
         const cur_lev_topleft_Y = Math.floor(lev_1_topleft_Y / downsample);
         const cur_lev_bottomright__X = Math.ceil(lev_1_bottomright_X / downsample);
         const cur_lev_bottomright__Y = Math.ceil(lev_1_bottomright_Y / downsample);
-        console.log(`[META] downsample: ${downsample}`)
-        console.log(`[META] lev_1_top_left: ${lev_1_topleft_X}, ${lev_1_topleft_Y}; lev_1_bottom_right: ${lev_1_bottomright_X}, ${lev_1_bottomright_Y}`)
-        console.log(`[META] cur_lev_top_left: ${cur_lev_topleft_X}, ${cur_lev_topleft_Y}; cur_lev_bottom_right: ${cur_lev_bottomright__X}, ${cur_lev_bottomright__Y}` )
 
         const topleft_tile_X = Math.floor(cur_lev_topleft_X / TILE_SIZE);
         const topleft_tile_Y = Math.floor(cur_lev_topleft_Y / TILE_SIZE);
         const bottomright_tile_X = Math.floor(cur_lev_bottomright__X / TILE_SIZE);
         const bottomright_tile_Y = Math.floor(cur_lev_bottomright__Y / TILE_SIZE);
-        console.log(`[META] tile_topleft: (${topleft_tile_X}, ${topleft_tile_Y})`)
-        console.log(`[META] tile_bottom_right: (${bottomright_tile_X}, ${bottomright_tile_Y})`)
 
         const maxTileCol = Math.ceil(levelW / TILE_SIZE) - 1;
         const maxTileRow = Math.ceil(levelH / TILE_SIZE) - 1;
-        console.log(`[META] maxTileCol: ${maxTileCol}, maxTileRow: ${maxTileRow}`)
 
         const tiles = [];
         for (let col = Math.max(0, topleft_tile_X); col <= Math.min(bottomright_tile_X, maxTileCol); col++) {
@@ -242,7 +217,6 @@
                 tiles.push({ level, col, row });
             }
         }
-        console.debug(`[META] Level ${level}: ${tiles.length} tile visibili`);
         return tiles;
     }
 
@@ -253,12 +227,9 @@
         if (nextLevel >= metadata.level_downsamples.length) return;
 
         const nextTiles = computeVisibleLevelTiles(nextLevel);
-        console.debug(`[PREFETCH] Precaricamento livello ${nextLevel}: ${nextTiles.length} tile`);
         
         nextTiles.forEach(tile => {
-            requestTile(tile.level, tile.col, tile.row).catch(err => {
-                console.debug(`[PREFETCH] Errore nel prefetch del tile L${tile.level} C${tile.col} R${tile.row}`);
-            });
+            requestTile(tile.level, tile.col, tile.row).catch(err => {});
         });
     }
 
@@ -266,13 +237,12 @@
     // PER EVITARE PREFETCH MULTIPLI DURANTE LO SCROLL/ZOOM, SCHEDULA IL PREFETCH DOPO 500ms DI INATTIVITA
     function schedulePrefetch(level) {
         // Cancella il timer precedente
-        if (timerPrefatch) {
+        if (timerPrefetch) {
 
-            clearTimeout(timerPrefatch);
+            clearTimeout(timerPrefetch);
         }
         
-        timerPrefatch = setTimeout(() => {
-            console.debug(`[PREFETCH] Utente inattivo, avvio prefetch per livello ${level}`);
+        timerPrefetch = setTimeout(() => {
             prefetchNextLevel(level);
         }, 500);
     }
@@ -368,11 +338,9 @@
         if (isInitialZoom) {
             // Zoom iniziale: ordine naturale da sinistra a destra, dall'alto in basso
             finalTiles = tiles;
-            console.debug(`[RENDER] Zoom iniziale, uso ordine naturale per ${tiles.length} tile`);
         } else {
             // Zoom/pan dell'utente: ordine dal centro
             finalTiles = sortTilesByDistanceFromCenter(tiles, level);
-            console.debug(`[RENDER] Zoom utente, ordino ${tiles.length} tile dal centro`);
         }
 
         loadTilesInBackground(finalTiles, level, downsample);
@@ -393,7 +361,6 @@
                 
                 const currentLevel = chooseLevel(currentZoom);
                 if (currentLevel !== level) {
-                    console.debug(`[BACKGROUND] Livello cambiato da ${level} a ${currentLevel}, tile ignorato`);
                     break;
                 }
                 
@@ -402,7 +369,6 @@
                 const zoomDelta = Math.abs(currentZoom - renderZoom);
                 
                 if (offsetDeltaX > 100 || offsetDeltaY > 100 || zoomDelta > 0.1) {
-                    console.debug(`[BACKGROUND] Vista cambiata significativamente, tile ignorato`);
                     break;
                 }
                 
@@ -419,17 +385,14 @@
                 const t_weight = actualTileW * downsample * renderZoom;
                 const t_height = actualTileH * downsample * renderZoom;
 
-                console.log(`[BACKGROUND] Disegno L${level} C${tile.col}R${tile.row}:`);
 
                 ctx.drawImage(img, t_pos_X, t_pos_Y, t_weight, t_height);
                    
                 tilesLoaded++;
             } catch(error) {
-                console.error('[BACKGROUND] Errore nel caricamento:', error);
+                console.error('Errore nel caricamento dei tile in background:', error);
             }
         }
-
-        console.debug(`[RENDER] Caricati ${tilesLoaded}/${sortedTiles.length} tile per livello ${level}`);
         
         // Schedula il prefetch SOLO DOPO che tutti i tile sono stati caricati
         schedulePrefetch(level);
@@ -467,7 +430,6 @@
         offsetY = orig_imgY - centerY / newZoom;
         currentZoom = newZoom;
         constrainOffset();
-        console.log(`[ZOOM] zoomBy factor=${factor.toFixed(3)} -> zoom=${currentZoom.toFixed(3)}`);
         render();
     }
 
@@ -480,7 +442,6 @@
     }
 
     function zoomReset() {
-        console.log('[ZOOM] Reset');
         const initial = window.__INITIAL_FIT_ZOOM__ || 1.0;
         currentZoom = initial;
         offsetX = Math.max(0, (fullImageW - canvasW / currentZoom) / 2);
@@ -537,16 +498,12 @@
         canvas.releasePointerCapture(e.pointerId);
     });
 
-   
 
     // INIZIALIZZAZIONE
-    console.log('[INIT] Caricamento metadati...');
     try {
         metadata = await fetchMetadata();
         [fullImageW, fullImageH] = metadata.dimensions;
-        console.log(`[INIT] Immagine: ${fullImageW}x${fullImageH}`);
     } catch (err) {
-        console.error('[INIT] Errore caricamento metadati:', err);
         return;
     }
 
@@ -594,13 +551,6 @@
     offsetX = Math.max(0, (fullImageW - canvasW / currentZoom) / 2);
     offsetY = Math.max(0, (fullImageH - canvasH / currentZoom) / 2);
 
-    console.log(`[INIT] Canvas: ${canvasW}x${canvasH}, zoom iniziale: ${currentZoom.toFixed(6)}`);
-    console.log(`[INIT] Image: ${fullImageW}x${fullImageH}, aspect ratio: ${imageAspectRatio.toFixed(3)}`);
-    console.log(`[INIT] Offset iniziale: offsetX=${offsetX}, offsetY=${offsetY}`);
-    console.log(`[INIT] Viewport size in image coords: ${canvasW / currentZoom} x ${canvasH / currentZoom}`);
-
-    console.log('[INIT] Primo rendering...');
     render();
-    console.log('[INIT] Script pronto!');
-
+  
 })();

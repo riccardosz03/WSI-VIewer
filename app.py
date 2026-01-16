@@ -37,7 +37,6 @@ def upload_file():
     if file and any(filename.endswith(ext) for ext in ALLOWED_EXTENSIONS):
         filepath = slide_path(file.filename)
         file.save(filepath)
-        print(f"File {filepath} caricato con successo.")
         return redirect(url_for('view_file', filename=file.filename))
     return 'Formato file non supportato', 400
 
@@ -67,7 +66,6 @@ def get_deepzoom(filename):
 # RESTITUISCE UN OGGETTO JSON CON LE INFORMAZIONI DELLA SLIDE
 @app.route('/slide/<filename>/info')
 def slide_info(filename):
-    print(f"\n[INFO] Richiesta info per file: {filename}")
     slide = get_slide(filename)
     dz = get_deepzoom(filename)
     
@@ -80,12 +78,6 @@ def slide_info(filename):
             level_downsamples.append(ds)
     except Exception:
         level_downsamples = list(getattr(slide, 'level_downsamples', []))
-
-    # LOGS
-    print(f"[INFO] Slide dimensions: {slide.dimensions}")
-    print(f"[INFO] Number of levels: {dz.level_count}")
-    print(f"[INFO] Level dimensions: {level_dimensions}")
-    print(f"[INFO] Level downsamples: {level_downsamples}")
 
     return jsonify({
         'dimensions': slide.dimensions,
